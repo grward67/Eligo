@@ -1,0 +1,111 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// SQLite has no native enum support in Prisma, so election status is a
+// plain string constrained to "DRAFT" | "OPEN" | "CLOSED" at the
+// application layer (zod schemas in the status API route enforce this).
+model Admin {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  accessCodes  AccessCode[]
+}
+
+model Election {
+  id            String         @id @default(cuid())
+  title         String
+  seats         Int
+  status        String         @default("DRAFT")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  candidates    Candidate[]
+  accessCodes   AccessCode[]
+  voterSessions VoterSession[]
+  ballots       Ballot[]
+}
+
+model Candidate {
+  id         String   @id @default(cuid())
+  electionId String
+  election   Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  name       String
+  party      String?
+  sortOrder  Int      @default(0)
+
+  @@index([electionId])
+}
+
+// Access codes are looked up by codeHash only. The plaintext code is
+// generated, shown once to the admin, and never persisted anywhere.
+model AccessCode {
+  id            String         @id @default(cuid())
+  electionId    String
+  election      Election       @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  codeHash      String         @unique
+  label         String?
+  // null = reusable / unlimited uses, 1 = one-time, N = capped at N uses.
+  maxUses       Int?
+  useCount      Int            @default(0)
+  active        Boolean        @default(true)
+  expiresAt     DateTime?
+  createdAt     DateTime       @default(now())
+  createdById   String
+  createdBy     Admin          @relation(fields: [createdById], references: [id])
+  voterSessions VoterSession[]
+
+  @@index([electionId])
+}
+
+// Created the moment a voter verifies a valid access code. The
+// voter_session cookie carries only this row's id (signed); every
+// protected voter route re-reads this row for the authoritative state.
+model VoterSession {
+  id              String     @id @default(cuid())
+  accessCodeId    String
+  accessCode      AccessCode @relation(fields: [accessCodeId], references: [id])
+  electionId      String
+  election        Election   @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  ballotSubmitted Boolean    @default(false)
+  revoked         Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  expiresAt       DateTime
+  ballot          Ballot?
+
+  @@index([electionId])
+}
+
+model Ballot {
+  id             String       @id @default(cuid())
+  electionId     String
+  election       Election     @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  voterSessionId String       @unique
+  voterSession   VoterSession @relation(fields: [voterSessionId], references: [id])
+  // JSON-encoded string[] of candidate ids, in preference order.
+  ranking        String
+  submittedAt    DateTime     @default(now())
+
+  @@index([electionId])
+}
+
+// Deliberately loose references (plain string ids, no FK) so audit
+// history survives even if the referenced row is later deleted.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorType  String
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  @@index([action])
+  @@index([createdAt])
+}

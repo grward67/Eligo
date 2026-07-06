@@ -1,0 +1,55 @@
+/* Brand tokens pulled from eligo.online (see home.css custom properties). */
+:root {
+  --color-primary: #3fc8a8;
+  --color-primary-content: #002c21;
+  --color-primary-border: #3fc8a8;
+  --color-secondary: #084d49;
+  --color-secondary-content: #f7f9fa;
+  --color-base-content: #002d2c;
+  --color-base-content-secondary: #002d2cb8;
+  --color-base-content-tertiary: #002d2c85;
+  --color-base-100: #e8f6ec;
+  --color-base-200: #d7efdf;
+  --color-base-300: #c3e5cf;
+  --color-base-border: #002d2c24;
+  --color-success: #00ba7b;
+  --color-error: #f34700;
+  --color-warning: #fa9700;
+  --color-info: #2a7eff;
+  --color-white: #fff;
+  --radius-card: 16px;
+  --radius-pill: 999px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--color-base-content);
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.form-error {
+  color: var(--color-error);
+  font-size: 0.9rem;
+}
