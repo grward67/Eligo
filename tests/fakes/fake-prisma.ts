@@ -29,7 +29,36 @@ export interface FakeBallot {
   submittedAt: Date;
 }
 
-export function createFakePrisma() {
+export interface FakePrismaClient {
+  _data: {
+    elections: FakeElection[];
+    candidates: FakeCandidate[];
+    voterSessions: FakeVoterSession[];
+    ballots: FakeBallot[];
+    auditLogs: unknown[];
+  };
+  election: {
+    findUnique: (args: { where: { id: string } }) => Promise<FakeElection | null>;
+    create: (args: { data: Partial<FakeElection> }) => Promise<FakeElection>;
+  };
+  candidate: {
+    findMany: (args: { where: { electionId: string } }) => Promise<FakeCandidate[]>;
+  };
+  voterSession: {
+    findUnique: (args: { where: { id: string } }) => Promise<FakeVoterSession | null>;
+    create: (args: { data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
+    update: (args: { where: { id: string }; data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
+  };
+  ballot: {
+    create: (args: { data: Partial<FakeBallot> }) => Promise<FakeBallot>;
+  };
+  auditLog: {
+    create: (args: { data: unknown }) => Promise<unknown>;
+  };
+  $transaction<T>(fnOrArray: ((tx: FakePrismaClient) => Promise<T>) | Promise<unknown>[]): Promise<T>;
+}
+
+export function createFakePrisma(): FakePrismaClient {
   const elections: FakeElection[] = [];
   const candidates: FakeCandidate[] = [];
   const voterSessions: FakeVoterSession[] = [];
@@ -38,7 +67,7 @@ export function createFakePrisma() {
   let idCounter = 0;
   const nextId = () => `id_${++idCounter}`;
 
-  const fake = {
+  const fake: FakePrismaClient = {
     _data: { elections, candidates, voterSessions, ballots, auditLogs },
 
     election: {
@@ -93,7 +122,7 @@ export function createFakePrisma() {
       },
     },
 
-    async $transaction<T>(fnOrArray: ((tx: typeof fake) => Promise<T>) | Promise<unknown>[]): Promise<T> {
+    async $transaction<T>(fnOrArray: ((tx: FakePrismaClient) => Promise<T>) | Promise<unknown>[]): Promise<T> {
       if (Array.isArray(fnOrArray)) {
         return Promise.all(fnOrArray) as unknown as T;
       }
