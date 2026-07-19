@@ -11,7 +11,7 @@ const CODE = "ABCDE-FGHJK";
 const CODE_HASH = hashAccessCode(CODE);
 
 function seedElection(status = "OPEN") {
-  fakePrisma._data.elections.push({ id: "e1", status });
+  fakePrisma._data.elections.push({ id: "e1", title: "Election 1", status });
 }
 
 describe("verifyAccessCode", () => {

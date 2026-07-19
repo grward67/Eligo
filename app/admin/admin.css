@@ -141,6 +141,22 @@
   padding: 10px 0;
   border-bottom: 1px solid var(--color-base-border);
 }
+.election-list a {
+  flex: 1;
+}
+
+.delete-selected-btn {
+  margin-top: 12px;
+  padding: 9px 18px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-error);
+  color: var(--color-white);
+  font-weight: 700;
+}
+.delete-selected-btn:disabled {
+  opacity: 0.5;
+}
 .status-badge {
   font-size: 0.7rem;
   font-weight: 700;

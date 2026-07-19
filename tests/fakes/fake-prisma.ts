@@ -1,8 +1,9 @@
 // Minimal in-memory stand-in for the subset of PrismaClient the service
-// layer touches. Lets ballot-service tests run without a real database.
+// layer touches. Lets service-layer tests run without a real database.
 
 export interface FakeElection {
   id: string;
+  title: string;
   status: string;
 }
 
@@ -50,16 +51,20 @@ export interface FakePrismaClient {
   };
   election: {
     findUnique: (args: { where: { id: string } }) => Promise<FakeElection | null>;
+    findMany: (args: { where: { id: { in: string[] } } }) => Promise<FakeElection[]>;
     create: (args: { data: Partial<FakeElection> }) => Promise<FakeElection>;
+    delete: (args: { where: { id: string } }) => Promise<FakeElection>;
   };
   candidate: {
     findMany: (args: { where: { electionId: string } }) => Promise<FakeCandidate[]>;
+    deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
   accessCode: {
     findFirst: (args: { where: { electionId: string; codeHash: string } }) => Promise<FakeAccessCode | null>;
     findUnique: (args: { where: { id: string } }) => Promise<FakeAccessCode | null>;
     create: (args: { data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
     update: (args: { where: { id: string }; data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
+    deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
   voterSession: {
     findUnique: (args: { where: { id: string } }) => Promise<FakeVoterSession | null>;
@@ -68,9 +73,11 @@ export interface FakePrismaClient {
     ) => Promise<FakeVoterSession | null>;
     create: (args: { data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
     update: (args: { where: { id: string }; data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
+    deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
   ballot: {
     create: (args: { data: Partial<FakeBallot> }) => Promise<FakeBallot>;
+    deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
   auditLog: {
     create: (args: { data: unknown }) => Promise<unknown>;
@@ -94,9 +101,17 @@ export function createFakePrisma(): FakePrismaClient {
     election: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         elections.find((e) => e.id === where.id) ?? null,
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+        elections.filter((e) => where.id.in.includes(e.id)),
       create: async ({ data }: { data: Partial<FakeElection> }) => {
-        const row = { id: nextId(), status: "DRAFT", ...data } as FakeElection;
+        const row = { id: nextId(), title: "Untitled", status: "DRAFT", ...data } as FakeElection;
         elections.push(row);
+        return row;
+      },
+      delete: async ({ where }: { where: { id: string } }) => {
+        const idx = elections.findIndex((e) => e.id === where.id);
+        if (idx === -1) throw new Error("election not found");
+        const [row] = elections.splice(idx, 1);
         return row;
       },
     },
@@ -104,6 +119,13 @@ export function createFakePrisma(): FakePrismaClient {
     candidate: {
       findMany: async ({ where }: { where: { electionId: string } }) =>
         candidates.filter((c) => c.electionId === where.electionId),
+      deleteMany: async ({ where }: { where: { electionId: string } }) => {
+        const before = candidates.length;
+        const remaining = candidates.filter((c) => c.electionId !== where.electionId);
+        candidates.length = 0;
+        candidates.push(...remaining);
+        return { count: before - candidates.length };
+      },
     },
 
     accessCode: {
@@ -128,6 +150,13 @@ export function createFakePrisma(): FakePrismaClient {
         if (!row) throw new Error("accessCode not found");
         Object.assign(row, data);
         return row;
+      },
+      deleteMany: async ({ where }: { where: { electionId: string } }) => {
+        const before = accessCodes.length;
+        const remaining = accessCodes.filter((c) => c.electionId !== where.electionId);
+        accessCodes.length = 0;
+        accessCodes.push(...remaining);
+        return { count: before - accessCodes.length };
       },
     },
 
@@ -155,6 +184,13 @@ export function createFakePrisma(): FakePrismaClient {
         Object.assign(row, data);
         return row;
       },
+      deleteMany: async ({ where }: { where: { electionId: string } }) => {
+        const before = voterSessions.length;
+        const remaining = voterSessions.filter((v) => v.electionId !== where.electionId);
+        voterSessions.length = 0;
+        voterSessions.push(...remaining);
+        return { count: before - voterSessions.length };
+      },
     },
 
     ballot: {
@@ -162,6 +198,13 @@ export function createFakePrisma(): FakePrismaClient {
         const row = { id: nextId(), submittedAt: new Date(), ...data } as FakeBallot;
         ballots.push(row);
         return row;
+      },
+      deleteMany: async ({ where }: { where: { electionId: string } }) => {
+        const before = ballots.length;
+        const remaining = ballots.filter((b) => b.electionId !== where.electionId);
+        ballots.length = 0;
+        ballots.push(...remaining);
+        return { count: before - ballots.length };
       },
     },
 

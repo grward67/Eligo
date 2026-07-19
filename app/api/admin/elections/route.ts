@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/require-admin";
 import { prisma } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit/log";
+import { deleteElections } from "@/lib/services/election-service";
 
 const bodySchema = z.object({
   title: z.string().min(1),
@@ -34,4 +35,23 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json({ ok: true, election });
+}
+
+const deleteBodySchema = z.object({
+  electionIds: z.array(z.string().min(1)).min(1),
+});
+
+export async function DELETE(request: NextRequest) {
+  const admin = await requireAdminSession();
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const parsed = deleteBodySchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const result = await deleteElections(parsed.data.electionIds, admin.sub);
+  return NextResponse.json(result);
 }

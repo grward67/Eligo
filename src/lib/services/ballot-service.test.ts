@@ -7,7 +7,7 @@ vi.mock("@/lib/db", () => ({ prisma: fakePrisma }));
 const { submitBallot } = await import("./ballot-service");
 
 function seed() {
-  fakePrisma._data.elections.push({ id: "e1", status: "OPEN" });
+  fakePrisma._data.elections.push({ id: "e1", title: "Election 1", status: "OPEN" });
   fakePrisma._data.candidates.push({ id: "c1", electionId: "e1" }, { id: "c2", electionId: "e1" });
   fakePrisma._data.voterSessions.push({
     id: "vs1",
@@ -73,7 +73,7 @@ describe("submitBallot", () => {
 
   it("rejects submission when the session's electionId does not match", async () => {
     seed();
-    fakePrisma._data.elections.push({ id: "e2", status: "OPEN" });
+    fakePrisma._data.elections.push({ id: "e2", title: "Election 2", status: "OPEN" });
     const result = await submitBallot("vs1", "e2", ["c1"]);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe("SESSION_NOT_FOUND");
