@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/require-admin";
-import { generateCodes } from "@/lib/services/code-service";
+import { generateCodes, MAX_GENERATE_COUNT } from "@/lib/services/code-service";
 
 const bodySchema = z.object({
   electionId: z.string().min(1),
-  count: z.number().int().min(1).max(500),
+  count: z.number().int().min(1).max(MAX_GENERATE_COUNT),
   maxUses: z.number().int().min(1).nullable(),
   label: z.string().nullable().optional(),
   expiresAt: z.string().datetime().nullable().optional(),

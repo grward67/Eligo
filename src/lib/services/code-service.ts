@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/db";
 import { generateAccessCode, hashAccessCode } from "@/lib/auth/access-code";
 import { writeAuditLog } from "@/lib/audit/log";
+import { MAX_GENERATE_COUNT } from "@/lib/services/code-limits";
+
+export { MAX_GENERATE_COUNT } from "@/lib/services/code-limits";
 
 export interface GenerateCodesOptions {
   electionId: string;
@@ -13,13 +16,12 @@ export interface GenerateCodesOptions {
 }
 
 export interface GeneratedCode {
-  id: string;
   plaintextCode: string;
 }
 
 export async function generateCodes(opts: GenerateCodesOptions): Promise<GeneratedCode[]> {
-  if (!Number.isInteger(opts.count) || opts.count < 1 || opts.count > 500) {
-    throw new Error("count must be an integer between 1 and 500");
+  if (!Number.isInteger(opts.count) || opts.count < 1 || opts.count > MAX_GENERATE_COUNT) {
+    throw new Error(`count must be an integer between 1 and ${MAX_GENERATE_COUNT}`);
   }
 
   const drafts = Array.from({ length: opts.count }, () => {
@@ -27,20 +29,20 @@ export async function generateCodes(opts: GenerateCodesOptions): Promise<Generat
     return { plaintextCode, codeHash: hashAccessCode(plaintextCode) };
   });
 
-  const created = await prisma.$transaction(
-    drafts.map((d) =>
-      prisma.accessCode.create({
-        data: {
-          electionId: opts.electionId,
-          codeHash: d.codeHash,
-          label: opts.label ?? null,
-          maxUses: opts.maxUses,
-          expiresAt: opts.expiresAt ?? null,
-          createdById: opts.createdById,
-        },
-      })
-    )
-  );
+  // A single bulk insert rather than one create() per code inside an
+  // interactive transaction: for large batches (hundreds+), issuing that
+  // many sequential round trips risked running past the serverless
+  // function's execution time limit.
+  await prisma.accessCode.createMany({
+    data: drafts.map((d) => ({
+      electionId: opts.electionId,
+      codeHash: d.codeHash,
+      label: opts.label ?? null,
+      maxUses: opts.maxUses,
+      expiresAt: opts.expiresAt ?? null,
+      createdById: opts.createdById,
+    })),
+  });
 
   await writeAuditLog({
     actorType: "admin",
@@ -51,7 +53,7 @@ export async function generateCodes(opts: GenerateCodesOptions): Promise<Generat
     metadata: { count: opts.count, maxUses: opts.maxUses, label: opts.label ?? null },
   });
 
-  return created.map((row, i) => ({ id: row.id, plaintextCode: drafts[i].plaintextCode }));
+  return drafts.map((d) => ({ plaintextCode: d.plaintextCode }));
 }
 
 export async function revokeCode(codeId: string, revokedById: string): Promise<void> {

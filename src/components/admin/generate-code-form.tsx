@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { MAX_GENERATE_COUNT } from "@/lib/services/code-limits";
 
 export function GenerateCodeForm({ electionId }: { electionId: string }) {
   const router = useRouter();
@@ -12,6 +13,19 @@ export function GenerateCodeForm({ electionId }: { electionId: string }) {
   const [generated, setGenerated] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function handleCountChange(raw: string) {
+    const parsed = parseInt(raw, 10);
+    if (Number.isNaN(parsed)) {
+      setCount(1);
+      return;
+    }
+    // Clamp in JS rather than relying on the input's max attribute: native
+    // browser validation silently blocks form submission on an out-of-range
+    // value (no error shown, handleSubmit never runs), which is confusing --
+    // it looks like nothing happened rather than telling the admin why.
+    setCount(Math.min(Math.max(parsed, 1), MAX_GENERATE_COUNT));
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -57,15 +71,15 @@ export function GenerateCodeForm({ electionId }: { electionId: string }) {
 
   return (
     <div className="generate-code-panel">
-      <form onSubmit={handleSubmit} className="inline-form">
+      <form onSubmit={handleSubmit} className="inline-form" noValidate>
         <label>
-          How many
+          How many (up to {MAX_GENERATE_COUNT})
           <input
             type="number"
             min={1}
-            max={500}
+            max={MAX_GENERATE_COUNT}
             value={count}
-            onChange={(e) => setCount(parseInt(e.target.value, 10) || 1)}
+            onChange={(e) => handleCountChange(e.target.value)}
           />
         </label>
         <label>
@@ -79,7 +93,7 @@ export function GenerateCodeForm({ electionId }: { electionId: string }) {
               type="number"
               min={1}
               value={maxUses}
-              onChange={(e) => setMaxUses(parseInt(e.target.value, 10) || 1)}
+              onChange={(e) => setMaxUses(Math.max(parseInt(e.target.value, 10) || 1, 1))}
             />
           </label>
         )}
@@ -89,7 +103,7 @@ export function GenerateCodeForm({ electionId }: { electionId: string }) {
         </label>
         {error && <p className="form-error">{error}</p>}
         <button type="submit" disabled={submitting}>
-          {submitting ? "Generating..." : "Generate"}
+          {submitting ? `Generating ${count}...` : `Generate ${count}`}
         </button>
       </form>
 

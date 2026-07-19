@@ -63,6 +63,7 @@ export interface FakePrismaClient {
     findFirst: (args: { where: { electionId: string; codeHash: string } }) => Promise<FakeAccessCode | null>;
     findUnique: (args: { where: { id: string } }) => Promise<FakeAccessCode | null>;
     create: (args: { data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
+    createMany: (args: { data: Partial<FakeAccessCode>[] }) => Promise<{ count: number }>;
     update: (args: { where: { id: string }; data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
     deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
@@ -144,6 +145,19 @@ export function createFakePrisma(): FakePrismaClient {
         } as FakeAccessCode;
         accessCodes.push(row);
         return row;
+      },
+      createMany: async ({ data }: { data: Partial<FakeAccessCode>[] }) => {
+        for (const d of data) {
+          accessCodes.push({
+            id: nextId(),
+            useCount: 0,
+            active: true,
+            maxUses: null,
+            expiresAt: null,
+            ...d,
+          } as FakeAccessCode);
+        }
+        return { count: data.length };
       },
       update: async ({ where, data }: { where: { id: string }; data: Partial<FakeAccessCode> }) => {
         const row = accessCodes.find((c) => c.id === where.id);
