@@ -13,11 +13,16 @@ async function main() {
 
   const passwordHash = await hashPassword(password);
 
-  await prisma.admin.upsert({
-    where: { email },
-    update: { passwordHash },
-    create: { email, passwordHash },
-  });
+  // This is a deliberately single-admin system (no signup UI). Update the
+  // existing admin in place -- including its email -- rather than upsert
+  // by email, which would silently create a second admin account if
+  // ADMIN_EMAIL has changed since the last seed.
+  const existing = await prisma.admin.findFirst();
+  if (existing) {
+    await prisma.admin.update({ where: { id: existing.id }, data: { email, passwordHash } });
+  } else {
+    await prisma.admin.create({ data: { email, passwordHash } });
+  }
 
   console.log(`Admin account ready: ${email}`);
 }
