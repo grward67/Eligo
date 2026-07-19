@@ -17,11 +17,12 @@ export async function POST(request: NextRequest) {
   const result = await verifyAccessCode(parsed.data.electionId, parsed.data.code);
 
   if (!result.ok) {
-    const message =
-      result.error === "ELECTION_NOT_OPEN"
-        ? "Voting is not currently open for this election."
-        : "That code isn't valid. Please check it and try again.";
-    return NextResponse.json({ error: message }, { status: 401 });
+    const messages: Record<typeof result.error, string> = {
+      ELECTION_NOT_OPEN: "Voting is not currently open for this election.",
+      ALREADY_VOTED: "A vote has already been cast with this code.",
+      INVALID_CODE: "That code isn't valid. Please check it and try again.",
+    };
+    return NextResponse.json({ error: messages[result.error] }, { status: 401 });
   }
 
   const token = await signVoterSession({ voterSessionId: result.voterSessionId, electionId: result.electionId });

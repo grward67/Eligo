@@ -26,8 +26,8 @@ export default async function BallotPage({ params }: { params: { electionId: str
             <img src="/brand/logo.png" alt="Eligo" />
             <span>Eligo</span>
           </div>
-          <h1>Thank you</h1>
-          <p>Your ballot has already been recorded for this election.</p>
+          <h1>Thank you for voting!</h1>
+          <p>Your ballot has already been registered for this election.</p>
         </div>
       </main>
     );

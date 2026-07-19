@@ -66,6 +66,16 @@ export async function submitBallot(
       where: { id: voterSessionId },
       data: { ballotSubmitted: true },
     });
+
+    // One-time codes are only blocked once a vote is actually cast (not on
+    // login) -- this is where that block takes effect. Reusable/capped
+    // codes are untouched here; they stay governed by verify-service's
+    // use-count logic so other voters can still use the same code.
+    const accessCode = await tx.accessCode.findUnique({ where: { id: session.accessCodeId } });
+    if (accessCode && accessCode.maxUses === 1) {
+      await tx.accessCode.update({ where: { id: accessCode.id }, data: { active: false } });
+    }
+
     return created;
   });
 

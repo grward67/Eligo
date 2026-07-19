@@ -11,6 +11,16 @@ export interface FakeCandidate {
   electionId: string;
 }
 
+export interface FakeAccessCode {
+  id: string;
+  electionId: string;
+  codeHash: string;
+  maxUses: number | null;
+  useCount: number;
+  active: boolean;
+  expiresAt: Date | null;
+}
+
 export interface FakeVoterSession {
   id: string;
   electionId: string;
@@ -33,6 +43,7 @@ export interface FakePrismaClient {
   _data: {
     elections: FakeElection[];
     candidates: FakeCandidate[];
+    accessCodes: FakeAccessCode[];
     voterSessions: FakeVoterSession[];
     ballots: FakeBallot[];
     auditLogs: unknown[];
@@ -44,8 +55,17 @@ export interface FakePrismaClient {
   candidate: {
     findMany: (args: { where: { electionId: string } }) => Promise<FakeCandidate[]>;
   };
+  accessCode: {
+    findFirst: (args: { where: { electionId: string; codeHash: string } }) => Promise<FakeAccessCode | null>;
+    findUnique: (args: { where: { id: string } }) => Promise<FakeAccessCode | null>;
+    create: (args: { data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
+    update: (args: { where: { id: string }; data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
+  };
   voterSession: {
     findUnique: (args: { where: { id: string } }) => Promise<FakeVoterSession | null>;
+    findFirst: (
+      args: { where: { accessCodeId: string; ballotSubmitted: boolean } }
+    ) => Promise<FakeVoterSession | null>;
     create: (args: { data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
     update: (args: { where: { id: string }; data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
   };
@@ -61,6 +81,7 @@ export interface FakePrismaClient {
 export function createFakePrisma(): FakePrismaClient {
   const elections: FakeElection[] = [];
   const candidates: FakeCandidate[] = [];
+  const accessCodes: FakeAccessCode[] = [];
   const voterSessions: FakeVoterSession[] = [];
   const ballots: FakeBallot[] = [];
   const auditLogs: unknown[] = [];
@@ -68,7 +89,7 @@ export function createFakePrisma(): FakePrismaClient {
   const nextId = () => `id_${++idCounter}`;
 
   const fake: FakePrismaClient = {
-    _data: { elections, candidates, voterSessions, ballots, auditLogs },
+    _data: { elections, candidates, accessCodes, voterSessions, ballots, auditLogs },
 
     election: {
       findUnique: async ({ where }: { where: { id: string } }) =>
@@ -85,9 +106,38 @@ export function createFakePrisma(): FakePrismaClient {
         candidates.filter((c) => c.electionId === where.electionId),
     },
 
+    accessCode: {
+      findFirst: async ({ where }: { where: { electionId: string; codeHash: string } }) =>
+        accessCodes.find((c) => c.electionId === where.electionId && c.codeHash === where.codeHash) ?? null,
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        accessCodes.find((c) => c.id === where.id) ?? null,
+      create: async ({ data }: { data: Partial<FakeAccessCode> }) => {
+        const row = {
+          id: nextId(),
+          useCount: 0,
+          active: true,
+          maxUses: null,
+          expiresAt: null,
+          ...data,
+        } as FakeAccessCode;
+        accessCodes.push(row);
+        return row;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FakeAccessCode> }) => {
+        const row = accessCodes.find((c) => c.id === where.id);
+        if (!row) throw new Error("accessCode not found");
+        Object.assign(row, data);
+        return row;
+      },
+    },
+
     voterSession: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         voterSessions.find((v) => v.id === where.id) ?? null,
+      findFirst: async ({ where }: { where: { accessCodeId: string; ballotSubmitted: boolean } }) =>
+        voterSessions.find(
+          (v) => v.accessCodeId === where.accessCodeId && v.ballotSubmitted === where.ballotSubmitted
+        ) ?? null,
       create: async ({ data }: { data: Partial<FakeVoterSession> }) => {
         const row = {
           id: nextId(),

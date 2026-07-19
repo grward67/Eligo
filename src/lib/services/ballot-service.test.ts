@@ -24,6 +24,7 @@ describe("submitBallot", () => {
   beforeEach(() => {
     fakePrisma._data.elections.length = 0;
     fakePrisma._data.candidates.length = 0;
+    fakePrisma._data.accessCodes.length = 0;
     fakePrisma._data.voterSessions.length = 0;
     fakePrisma._data.ballots.length = 0;
     fakePrisma._data.auditLogs.length = 0;
@@ -92,5 +93,37 @@ describe("submitBallot", () => {
     const result = await submitBallot("vs1", "e1", ["c1"]);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe("ELECTION_NOT_OPEN");
+  });
+
+  it("deactivates a one-time access code once its vote is cast", async () => {
+    seed();
+    fakePrisma._data.accessCodes.push({
+      id: "ac1",
+      electionId: "e1",
+      codeHash: "hash1",
+      maxUses: 1,
+      useCount: 1,
+      active: true,
+      expiresAt: null,
+    });
+    const result = await submitBallot("vs1", "e1", ["c1"]);
+    expect(result.ok).toBe(true);
+    expect(fakePrisma._data.accessCodes[0].active).toBe(false);
+  });
+
+  it("leaves a reusable access code active after one of its votes is cast", async () => {
+    seed();
+    fakePrisma._data.accessCodes.push({
+      id: "ac1",
+      electionId: "e1",
+      codeHash: "hash1",
+      maxUses: null,
+      useCount: 1,
+      active: true,
+      expiresAt: null,
+    });
+    const result = await submitBallot("vs1", "e1", ["c1"]);
+    expect(result.ok).toBe(true);
+    expect(fakePrisma._data.accessCodes[0].active).toBe(true);
   });
 });

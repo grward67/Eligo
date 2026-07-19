@@ -17,6 +17,15 @@ export default async function CodesPage({ params }: { params: { electionId: stri
     },
   });
 
+  // One-time codes go inactive either because a vote was cast (normal) or
+  // because an admin revoked them (also possible) -- distinguish the two
+  // in the table so "Revoked" doesn't misleadingly imply admin action.
+  const votedSessions = await prisma.voterSession.findMany({
+    where: { electionId: params.electionId, ballotSubmitted: true },
+    select: { accessCodeId: true },
+  });
+  const votedCodeIds = new Set(votedSessions.map((v) => v.accessCodeId));
+
   return (
     <div>
       <h1>Access codes</h1>
@@ -37,10 +46,11 @@ export default async function CodesPage({ params }: { params: { electionId: stri
             <tr key={c.id}>
               <td>{c.label ?? "—"}</td>
               <td>
-                {c.useCount}
-                {c.maxUses !== null ? ` / ${c.maxUses}` : " (unlimited)"}
+                {c.maxUses === 1
+                  ? `${c.useCount} login attempt${c.useCount === 1 ? "" : "s"}`
+                  : `${c.useCount}${c.maxUses !== null ? ` / ${c.maxUses}` : " (unlimited)"}`}
               </td>
-              <td>{c.active ? "Active" : "Revoked"}</td>
+              <td>{c.active ? "Active" : votedCodeIds.has(c.id) ? "Voted" : "Revoked"}</td>
               <td>{c.expiresAt ? new Date(c.expiresAt).toLocaleString() : "—"}</td>
               <td>{new Date(c.createdAt).toLocaleString()}</td>
               <td>{c.active && <RevokeCodeButton codeId={c.id} />}</td>

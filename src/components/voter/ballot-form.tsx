@@ -60,8 +60,8 @@ export function BallotForm({ electionId, candidates }: { electionId: string; can
   if (submitted) {
     return (
       <div className="ballot-submitted">
-        <h2>Ballot submitted</h2>
-        <p>Thank you for voting.</p>
+        <h2>Thank you for voting!</h2>
+        <p>Your ballot has been successfully registered.</p>
       </div>
     );
   }
