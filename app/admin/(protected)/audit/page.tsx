@@ -1,11 +1,40 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 
-export default async function AuditLogPage() {
-  const logs = await prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
+export default async function AuditLogPage({ searchParams }: { searchParams: { target?: string; actor?: string } }) {
+  const target = searchParams.target?.trim() || null;
+  const actor = searchParams.actor?.trim() || null;
+
+  const logs = await prisma.auditLog.findMany({
+    where: target
+      ? { OR: [{ targetId: target }, { actorId: target }] }
+      : actor
+        ? { actorId: actor }
+        : undefined,
+    orderBy: { createdAt: "desc" },
+    take: target || actor ? 500 : 200,
+  });
 
   return (
     <div>
       <h1>Audit log</h1>
+
+      <form className="inline-form" action="/admin/audit">
+        <label>
+          Filter by exact id (actor or target)
+          <input name="target" defaultValue={target ?? ""} placeholder="e.g. an AccessCode or VoterSession id" />
+        </label>
+        <button type="submit">Filter</button>
+        {(target || actor) && <Link href="/admin/audit">Clear</Link>}
+      </form>
+
+      {(target || actor) && (
+        <p>
+          Showing up to 500 events matching <code>{target ?? actor}</code>.
+        </p>
+      )}
+      {!target && !actor && <p>Showing the most recent 200 events across all elections.</p>}
+
       <table className="audit-table">
         <thead>
           <tr>
@@ -29,7 +58,7 @@ export default async function AuditLogPage() {
           ))}
         </tbody>
       </table>
-      {logs.length === 0 && <p>No audit events yet.</p>}
+      {logs.length === 0 && <p>No matching audit events.</p>}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 
 interface LookupResult {
   found: boolean;
+  id?: string;
   electionId?: string;
   electionTitle?: string;
   label?: string | null;
@@ -100,6 +101,12 @@ export function CodeLookupForm() {
             <tr>
               <td>Created</td>
               <td>{result.createdAt ? new Date(result.createdAt).toLocaleString() : "—"}</td>
+            </tr>
+            <tr>
+              <td>Audit history</td>
+              <td>
+                <Link href={`/admin/audit?target=${result.id}`}>View every event for this code</Link>
+              </td>
             </tr>
           </tbody>
         </table>

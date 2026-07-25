@@ -73,6 +73,7 @@ export async function revokeCode(codeId: string, revokedById: string): Promise<v
 
 export interface CodeLookupResult {
   found: boolean;
+  id?: string;
   electionId?: string;
   electionTitle?: string;
   label?: string | null;
@@ -104,6 +105,7 @@ export async function lookupCode(rawCode: string): Promise<CodeLookupResult> {
 
   return {
     found: true,
+    id: code.id,
     electionId: code.electionId,
     electionTitle: code.election.title,
     label: code.label,
