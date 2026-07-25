@@ -21,10 +21,10 @@ export default async function AuditLogPage() {
               <td>{new Date(l.createdAt).toLocaleString()}</td>
               <td>
                 {l.actorType}
-                {l.actorId ? ` (${l.actorId.slice(0, 8)})` : ""}
+                {l.actorId ? ` (${l.actorId})` : ""}
               </td>
               <td>{l.action}</td>
-              <td>{l.targetType ? `${l.targetType}:${l.targetId?.slice(0, 8)}` : "—"}</td>
+              <td>{l.targetType ? `${l.targetType}:${l.targetId}` : "—"}</td>
             </tr>
           ))}
         </tbody>
