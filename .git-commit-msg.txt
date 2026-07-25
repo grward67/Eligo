@@ -1,0 +1,20 @@
+Fix: successful vote submission bounced voters back to code entry
+
+Root cause of the "can't vote" reports: /api/voter/ballot clears the
+voter_session cookie on success (reasonable on its own), but the
+BallotForm client then called router.refresh(). That re-runs the
+ballot page's server-side auth check with the now-cleared cookie,
+which redirects back to the code-entry page -- hijacking the view
+before the client-side "Thank you for voting" confirmation ever
+renders. Voters who successfully voted saw themselves bounced back to
+square one with no confirmation, reasonably assumed it failed, and
+some re-entered their code -- hitting the (correct) "already voted"
+block from a vote that had, in fact, gone through the first time.
+
+Verified live: walked through the full flow in a real browser against
+production before and after the fix. Before: POST /api/voter/ballot
+returned 200, then the page redirected back to /vote/<id> instead of
+showing the confirmation. After: confirmation displays as expected.
+
+Fix: remove the unnecessary router.refresh() -- the confirmation is
+pure client-side state and never needed a server refresh.

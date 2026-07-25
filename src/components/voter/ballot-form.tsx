@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 interface Candidate {
   id: string;
@@ -10,7 +9,6 @@ interface Candidate {
 }
 
 export function BallotForm({ electionId, candidates }: { electionId: string; candidates: Candidate[] }) {
-  const router = useRouter();
   const [ranking, setRanking] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -54,7 +52,6 @@ export function BallotForm({ electionId, candidates }: { electionId: string; can
     }
 
     setSubmitted(true);
-    router.refresh();
   }
 
   if (submitted) {
