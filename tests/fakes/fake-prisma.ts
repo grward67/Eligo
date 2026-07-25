@@ -16,10 +16,12 @@ export interface FakeAccessCode {
   id: string;
   electionId: string;
   codeHash: string;
+  label?: string | null;
   maxUses: number | null;
   useCount: number;
   active: boolean;
   expiresAt: Date | null;
+  createdAt?: Date;
 }
 
 export interface FakeVoterSession {
@@ -61,7 +63,10 @@ export interface FakePrismaClient {
   };
   accessCode: {
     findFirst: (args: { where: { electionId: string; codeHash: string } }) => Promise<FakeAccessCode | null>;
-    findUnique: (args: { where: { id: string } }) => Promise<FakeAccessCode | null>;
+    findUnique: (args: {
+      where: { id?: string; codeHash?: string };
+      include?: { election?: { select: { title: true } } };
+    }) => Promise<(FakeAccessCode & { election?: { title: string } }) | null>;
     create: (args: { data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
     createMany: (args: { data: Partial<FakeAccessCode>[] }) => Promise<{ count: number }>;
     update: (args: { where: { id: string }; data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
@@ -69,9 +74,10 @@ export interface FakePrismaClient {
   };
   voterSession: {
     findUnique: (args: { where: { id: string } }) => Promise<FakeVoterSession | null>;
-    findFirst: (
-      args: { where: { accessCodeId: string; ballotSubmitted: boolean } }
-    ) => Promise<FakeVoterSession | null>;
+    findFirst: (args: {
+      where: { accessCodeId: string; ballotSubmitted: boolean };
+      include?: { ballot?: { select: { submittedAt: true } } };
+    }) => Promise<(FakeVoterSession & { ballot?: { submittedAt: Date } | null }) | null>;
     create: (args: { data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
     update: (args: { where: { id: string }; data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
     deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
@@ -132,15 +138,32 @@ export function createFakePrisma(): FakePrismaClient {
     accessCode: {
       findFirst: async ({ where }: { where: { electionId: string; codeHash: string } }) =>
         accessCodes.find((c) => c.electionId === where.electionId && c.codeHash === where.codeHash) ?? null,
-      findUnique: async ({ where }: { where: { id: string } }) =>
-        accessCodes.find((c) => c.id === where.id) ?? null,
+      findUnique: async ({
+        where,
+        include,
+      }: {
+        where: { id?: string; codeHash?: string };
+        include?: { election?: { select: { title: true } } };
+      }) => {
+        const row = accessCodes.find(
+          (c) => (where.id !== undefined && c.id === where.id) || (where.codeHash !== undefined && c.codeHash === where.codeHash)
+        );
+        if (!row) return null;
+        if (include?.election) {
+          const election = elections.find((e) => e.id === row.electionId);
+          return { ...row, election: { title: election?.title ?? "" } };
+        }
+        return row;
+      },
       create: async ({ data }: { data: Partial<FakeAccessCode> }) => {
         const row = {
           id: nextId(),
+          label: null,
           useCount: 0,
           active: true,
           maxUses: null,
           expiresAt: null,
+          createdAt: new Date(),
           ...data,
         } as FakeAccessCode;
         accessCodes.push(row);
@@ -150,10 +173,12 @@ export function createFakePrisma(): FakePrismaClient {
         for (const d of data) {
           accessCodes.push({
             id: nextId(),
+            label: null,
             useCount: 0,
             active: true,
             maxUses: null,
             expiresAt: null,
+            createdAt: new Date(),
             ...d,
           } as FakeAccessCode);
         }
@@ -177,10 +202,23 @@ export function createFakePrisma(): FakePrismaClient {
     voterSession: {
       findUnique: async ({ where }: { where: { id: string } }) =>
         voterSessions.find((v) => v.id === where.id) ?? null,
-      findFirst: async ({ where }: { where: { accessCodeId: string; ballotSubmitted: boolean } }) =>
-        voterSessions.find(
+      findFirst: async ({
+        where,
+        include,
+      }: {
+        where: { accessCodeId: string; ballotSubmitted: boolean };
+        include?: { ballot?: { select: { submittedAt: true } } };
+      }) => {
+        const row = voterSessions.find(
           (v) => v.accessCodeId === where.accessCodeId && v.ballotSubmitted === where.ballotSubmitted
-        ) ?? null,
+        );
+        if (!row) return null;
+        if (include?.ballot) {
+          const ballot = ballots.find((b) => b.voterSessionId === row.id);
+          return { ...row, ballot: ballot ? { submittedAt: ballot.submittedAt } : null };
+        }
+        return row;
+      },
       create: async ({ data }: { data: Partial<FakeVoterSession> }) => {
         const row = {
           id: nextId(),

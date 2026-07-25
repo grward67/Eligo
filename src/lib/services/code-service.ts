@@ -70,3 +70,49 @@ export async function revokeCode(codeId: string, revokedById: string): Promise<v
     targetId: code.id,
   });
 }
+
+export interface CodeLookupResult {
+  found: boolean;
+  electionId?: string;
+  electionTitle?: string;
+  label?: string | null;
+  maxUses?: number | null;
+  useCount?: number;
+  active?: boolean;
+  expiresAt?: Date | null;
+  createdAt?: Date;
+  hasVoted?: boolean;
+  votedAt?: Date | null;
+}
+
+/** Support-desk lookup: what is this specific plaintext code's current state, and has it voted? */
+export async function lookupCode(rawCode: string): Promise<CodeLookupResult> {
+  const codeHash = hashAccessCode(rawCode);
+  const code = await prisma.accessCode.findUnique({
+    where: { codeHash },
+    include: { election: { select: { title: true } } },
+  });
+
+  if (!code) {
+    return { found: false };
+  }
+
+  const votedSession = await prisma.voterSession.findFirst({
+    where: { accessCodeId: code.id, ballotSubmitted: true },
+    include: { ballot: { select: { submittedAt: true } } },
+  });
+
+  return {
+    found: true,
+    electionId: code.electionId,
+    electionTitle: code.election.title,
+    label: code.label,
+    maxUses: code.maxUses,
+    useCount: code.useCount,
+    active: code.active,
+    expiresAt: code.expiresAt,
+    createdAt: code.createdAt,
+    hasVoted: votedSession !== null,
+    votedAt: votedSession?.ballot?.submittedAt ?? null,
+  };
+}

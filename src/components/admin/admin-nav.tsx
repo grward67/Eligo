@@ -19,6 +19,7 @@ export function AdminNav({ email }: { email: string }) {
         Eligo
       </span>
       <Link href="/admin">Elections</Link>
+      <Link href="/admin/lookup">Look up code</Link>
       <Link href="/admin/audit">Audit log</Link>
       <span className="admin-nav-email">{email}</span>
       <button onClick={handleLogout}>Log out</button>
