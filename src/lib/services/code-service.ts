@@ -84,6 +84,7 @@ export interface CodeLookupResult {
   createdAt?: Date;
   hasVoted?: boolean;
   votedAt?: Date | null;
+  ballotId?: string | null;
 }
 
 /** Support-desk lookup: what is this specific plaintext code's current state, and has it voted? */
@@ -100,7 +101,7 @@ export async function lookupCode(rawCode: string): Promise<CodeLookupResult> {
 
   const votedSession = await prisma.voterSession.findFirst({
     where: { accessCodeId: code.id, ballotSubmitted: true },
-    include: { ballot: { select: { submittedAt: true } } },
+    include: { ballot: { select: { id: true, submittedAt: true } } },
   });
 
   return {
@@ -116,5 +117,6 @@ export async function lookupCode(rawCode: string): Promise<CodeLookupResult> {
     createdAt: code.createdAt,
     hasVoted: votedSession !== null,
     votedAt: votedSession?.ballot?.submittedAt ?? null,
+    ballotId: votedSession?.ballot?.id ?? null,
   };
 }

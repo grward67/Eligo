@@ -161,6 +161,7 @@ describe("lookupCode", () => {
     expect(result.active).toBe(false);
     expect(result.hasVoted).toBe(true);
     expect(result.votedAt).toEqual(votedAt);
+    expect(result.ballotId).toBe("b1");
   });
 
   it("is insensitive to case, spacing, and dashes, matching how voters type it", async () => {

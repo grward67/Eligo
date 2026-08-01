@@ -16,6 +16,7 @@ interface LookupResult {
   createdAt?: string;
   hasVoted?: boolean;
   votedAt?: string | null;
+  ballotId?: string | null;
 }
 
 export function CodeLookupForm() {
@@ -23,6 +24,7 @@ export function CodeLookupForm() {
   const [result, setResult] = useState<LookupResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -45,6 +47,23 @@ export function CodeLookupForm() {
     }
 
     setResult(await res.json());
+  }
+
+  async function handleDeleteBallot() {
+    if (!result?.ballotId) return;
+    if (!confirm("Delete this ballot? This removes it from the election's results permanently.")) return;
+
+    setDeleting(true);
+    const res = await fetch(`/api/admin/ballots/${result.ballotId}`, { method: "DELETE" });
+    setDeleting(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Could not delete that ballot.");
+      return;
+    }
+
+    setResult((prev) => (prev ? { ...prev, hasVoted: false, votedAt: null, ballotId: null } : prev));
   }
 
   return (
@@ -85,6 +104,14 @@ export function CodeLookupForm() {
                 {result.hasVoted
                   ? `Yes${result.votedAt ? `, at ${new Date(result.votedAt).toLocaleString()}` : ""}`
                   : "No"}
+                {result.hasVoted && result.ballotId && (
+                  <>
+                    {" "}
+                    <button type="button" onClick={handleDeleteBallot} disabled={deleting}>
+                      {deleting ? "Deleting..." : "Delete this ballot"}
+                    </button>
+                  </>
+                )}
               </td>
             </tr>
             <tr>

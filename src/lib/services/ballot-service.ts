@@ -90,3 +90,41 @@ export async function submitBallot(
 
   return { ok: true, ballotId: ballot.id };
 }
+
+export interface DeleteBallotResult {
+  ok: boolean;
+  error?: "NOT_FOUND";
+}
+
+/**
+ * Admin cleanup tool: removes a specific ballot (e.g. a test vote cast
+ * while diagnosing an issue) without touching any other ballot. Resets
+ * the originating voter session's ballotSubmitted flag back to false so
+ * its bookkeeping stays consistent -- it does not reactivate the access
+ * code, since that's a separate, deliberate admin action if needed.
+ */
+export async function deleteBallot(ballotId: string, deletedById: string): Promise<DeleteBallotResult> {
+  const ballot = await prisma.ballot.findUnique({ where: { id: ballotId } });
+  if (!ballot) {
+    return { ok: false, error: "NOT_FOUND" };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.ballot.delete({ where: { id: ballotId } });
+    await tx.voterSession.update({
+      where: { id: ballot.voterSessionId },
+      data: { ballotSubmitted: false },
+    });
+  });
+
+  await writeAuditLog({
+    actorType: "admin",
+    actorId: deletedById,
+    action: "ballot.delete",
+    targetType: "Ballot",
+    targetId: ballotId,
+    metadata: { electionId: ballot.electionId, voterSessionId: ballot.voterSessionId },
+  });
+
+  return { ok: true };
+}

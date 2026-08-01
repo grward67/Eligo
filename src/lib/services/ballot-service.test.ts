@@ -4,7 +4,7 @@ import { createFakePrisma } from "../../../tests/fakes/fake-prisma";
 const fakePrisma = createFakePrisma();
 vi.mock("@/lib/db", () => ({ prisma: fakePrisma }));
 
-const { submitBallot } = await import("./ballot-service");
+const { submitBallot, deleteBallot } = await import("./ballot-service");
 
 function seed() {
   fakePrisma._data.elections.push({ id: "e1", title: "Election 1", status: "OPEN" });
@@ -125,5 +125,81 @@ describe("submitBallot", () => {
     const result = await submitBallot("vs1", "e1", ["c1"]);
     expect(result.ok).toBe(true);
     expect(fakePrisma._data.accessCodes[0].active).toBe(true);
+  });
+});
+
+describe("deleteBallot", () => {
+  beforeEach(() => {
+    fakePrisma._data.elections.length = 0;
+    fakePrisma._data.candidates.length = 0;
+    fakePrisma._data.accessCodes.length = 0;
+    fakePrisma._data.voterSessions.length = 0;
+    fakePrisma._data.ballots.length = 0;
+    fakePrisma._data.auditLogs.length = 0;
+  });
+
+  it("removes the ballot and resets its voter session's ballotSubmitted flag", async () => {
+    fakePrisma._data.voterSessions.push({
+      id: "vs1",
+      electionId: "e1",
+      accessCodeId: "ac1",
+      ballotSubmitted: true,
+      revoked: false,
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+    fakePrisma._data.ballots.push({
+      id: "b1",
+      electionId: "e1",
+      voterSessionId: "vs1",
+      ranking: "[]",
+      submittedAt: new Date(),
+    });
+
+    const result = await deleteBallot("b1", "admin1");
+
+    expect(result.ok).toBe(true);
+    expect(fakePrisma._data.ballots).toHaveLength(0);
+    expect(fakePrisma._data.voterSessions[0].ballotSubmitted).toBe(false);
+    expect(fakePrisma._data.auditLogs).toHaveLength(1);
+  });
+
+  it("does not affect other ballots", async () => {
+    fakePrisma._data.voterSessions.push(
+      {
+        id: "vs1",
+        electionId: "e1",
+        accessCodeId: "ac1",
+        ballotSubmitted: true,
+        revoked: false,
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+      },
+      {
+        id: "vs2",
+        electionId: "e1",
+        accessCodeId: "ac2",
+        ballotSubmitted: true,
+        revoked: false,
+        expiresAt: new Date(Date.now() + 60_000),
+        createdAt: new Date(),
+      }
+    );
+    fakePrisma._data.ballots.push(
+      { id: "b1", electionId: "e1", voterSessionId: "vs1", ranking: "[]", submittedAt: new Date() },
+      { id: "b2", electionId: "e1", voterSessionId: "vs2", ranking: "[]", submittedAt: new Date() }
+    );
+
+    await deleteBallot("b1", "admin1");
+
+    expect(fakePrisma._data.ballots.map((b) => b.id)).toEqual(["b2"]);
+    expect(fakePrisma._data.voterSessions.find((v) => v.id === "vs2")?.ballotSubmitted).toBe(true);
+  });
+
+  it("reports NOT_FOUND for a ballot id that doesn't exist", async () => {
+    const result = await deleteBallot("does-not-exist", "admin1");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("NOT_FOUND");
+    expect(fakePrisma._data.auditLogs).toHaveLength(0);
   });
 });

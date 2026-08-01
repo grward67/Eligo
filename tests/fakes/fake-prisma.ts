@@ -76,14 +76,16 @@ export interface FakePrismaClient {
     findUnique: (args: { where: { id: string } }) => Promise<FakeVoterSession | null>;
     findFirst: (args: {
       where: { accessCodeId: string; ballotSubmitted: boolean };
-      include?: { ballot?: { select: { submittedAt: true } } };
-    }) => Promise<(FakeVoterSession & { ballot?: { submittedAt: Date } | null }) | null>;
+      include?: { ballot?: { select: { id?: true; submittedAt: true } } };
+    }) => Promise<(FakeVoterSession & { ballot?: { id: string; submittedAt: Date } | null }) | null>;
     create: (args: { data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
     update: (args: { where: { id: string }; data: Partial<FakeVoterSession> }) => Promise<FakeVoterSession>;
     deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
   ballot: {
+    findUnique: (args: { where: { id: string } }) => Promise<FakeBallot | null>;
     create: (args: { data: Partial<FakeBallot> }) => Promise<FakeBallot>;
+    delete: (args: { where: { id: string } }) => Promise<FakeBallot>;
     deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
   auditLog: {
@@ -207,7 +209,7 @@ export function createFakePrisma(): FakePrismaClient {
         include,
       }: {
         where: { accessCodeId: string; ballotSubmitted: boolean };
-        include?: { ballot?: { select: { submittedAt: true } } };
+        include?: { ballot?: { select: { id?: true; submittedAt: true } } };
       }) => {
         const row = voterSessions.find(
           (v) => v.accessCodeId === where.accessCodeId && v.ballotSubmitted === where.ballotSubmitted
@@ -215,7 +217,7 @@ export function createFakePrisma(): FakePrismaClient {
         if (!row) return null;
         if (include?.ballot) {
           const ballot = ballots.find((b) => b.voterSessionId === row.id);
-          return { ...row, ballot: ballot ? { submittedAt: ballot.submittedAt } : null };
+          return { ...row, ballot: ballot ? { id: ballot.id, submittedAt: ballot.submittedAt } : null };
         }
         return row;
       },
@@ -246,9 +248,16 @@ export function createFakePrisma(): FakePrismaClient {
     },
 
     ballot: {
+      findUnique: async ({ where }: { where: { id: string } }) => ballots.find((b) => b.id === where.id) ?? null,
       create: async ({ data }: { data: Partial<FakeBallot> }) => {
         const row = { id: nextId(), submittedAt: new Date(), ...data } as FakeBallot;
         ballots.push(row);
+        return row;
+      },
+      delete: async ({ where }: { where: { id: string } }) => {
+        const idx = ballots.findIndex((b) => b.id === where.id);
+        if (idx === -1) throw new Error("ballot not found");
+        const [row] = ballots.splice(idx, 1);
         return row;
       },
       deleteMany: async ({ where }: { where: { electionId: string } }) => {
