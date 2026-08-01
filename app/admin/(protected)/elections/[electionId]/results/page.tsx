@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/db";
 import { runSTV, StvValidationError } from "@/lib/stv/count";
 
+function fmtNum(n: number): string {
+  return n.toFixed(4).replace(/\.?0+$/, "");
+}
+
 export default async function ResultsPage({ params }: { params: { electionId: string } }) {
   const election = await prisma.election.findUnique({
     where: { id: params.electionId },
@@ -74,16 +78,21 @@ export default async function ResultsPage({ params }: { params: { electionId: st
               {r.tallies.map((t) => (
                 <tr key={t.id}>
                   <td>{t.name}</td>
-                  <td>{t.votes.toFixed(4).replace(/\.?0+$/, "")}</td>
+                  <td>{fmtNum(t.votes)}</td>
                   <td>{t.status}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p>{r.note}</p>
-          {r.exhausted > 1e-9 && (
+          {(r.exhausted > 1e-9 || r.cumulativeExhausted > 1e-9) && (
             <p>
-              <strong>{r.exhausted.toFixed(4).replace(/\.?0+$/, "")}</strong> vote(s) exhausted so far.
+              {r.exhausted > 1e-9 && (
+                <>
+                  <strong>{fmtNum(r.exhausted)}</strong> vote(s) newly exhausted this round.{" "}
+                </>
+              )}
+              Exhausted in total so far: <strong>{fmtNum(r.cumulativeExhausted)}</strong>.
             </p>
           )}
         </div>

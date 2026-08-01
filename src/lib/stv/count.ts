@@ -27,7 +27,10 @@ export interface StvRound {
   quota: number;
   tallies: StvTally[];
   note: string;
+  /** Ballots that exhausted (ran out of preferences) newly, during this specific round only. */
   exhausted: number;
+  /** Running total of exhausted ballots across every round up to and including this one. */
+  cumulativeExhausted: number;
   electedId?: string;
   electedIds?: string[];
   eliminatedId?: string;
@@ -121,11 +124,13 @@ export function runSTV(
   const winners: StvCandidateInput[] = [];
   let seatsFilled = 0;
   let roundNum = 0;
+  let cumulativeExhausted = 0;
   const maxRounds = candidates.length * 3 + 10;
 
   while (seatsFilled < seats && roundNum < maxRounds) {
     roundNum++;
     const { votes, exhausted } = assign();
+    cumulativeExhausted += exhausted;
     const hopefulIds = candidates.filter((c) => status[c.id] === "hopeful").map((c) => c.id);
     const remainingSeats = seats - seatsFilled;
 
@@ -150,6 +155,7 @@ export function runSTV(
         quota,
         tallies,
         exhausted,
+        cumulativeExhausted,
         electedIds: hopefulIds.slice(),
         note:
           `Only ${hopefulIds.length} hopeful candidate(s) remain for ${remainingSeats} open seat(s), so ` +
@@ -187,6 +193,7 @@ export function runSTV(
         quota,
         tallies,
         exhausted,
+        cumulativeExhausted,
         electedId: electId,
         surplus,
         transferValue,
@@ -206,6 +213,7 @@ export function runSTV(
       quota,
       tallies,
       exhausted,
+      cumulativeExhausted,
       eliminatedId: elimId,
       note:
         `${elimCandidate?.name ?? elimId} has the fewest votes (${fmt(votes[elimId] ?? 0)}) and no candidate has ` +

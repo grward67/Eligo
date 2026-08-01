@@ -47,6 +47,25 @@ describe("runSTV", () => {
 
     expect(result.rounds.at(-1)?.action).toBe("elect-remaining");
     expect(result.rounds.at(-1)?.electedIds).toEqual(["D"]);
+
+    // exhausted: newly-exhausted-this-round; cumulativeExhausted: running
+    // total. Nothing exhausts until Carol's eliminated ballots (b2, b5:
+    // [A,C], value 0.2 each after A's surplus transfer) run out of
+    // preferences in round 3 (0.2+0.2=0.4). Round 4 adds Bob's eliminated
+    // ballots that also have nowhere left to go: b6 [B,C] (both eliminated,
+    // value 1) plus b1/b4 [A,B] (value 0.2 each after transfer) = 1.4.
+    expect(result.rounds.map((r) => r.exhausted)).toEqual([0, 0, 0.4, 1.4]);
+    expect(result.rounds.map((r) => r.cumulativeExhausted)).toEqual([0, 0, 0.4, 1.8]);
+
+    // Conservation check: every one of the 10 ballots is accounted for by
+    // either a winner's final tally or exhaustion. Alice's tally freezes at
+    // the moment she's elected (her surplus already transferred out by
+    // then), so use the surplus-round tally rather than the final round's
+    // (where she shows 0, as elected candidates always do afterward).
+    const aliceTally = result.rounds[0].tallies.find((t) => t.id === "A")!.votes;
+    const daveTally = result.rounds.at(-1)!.tallies.find((t) => t.id === "D")!.votes;
+    const finalExhausted = result.rounds.at(-1)!.cumulativeExhausted;
+    expect(aliceTally + daveTally + finalExhausted).toBeCloseTo(10);
   });
 
   it("ignores ballots with an empty ranking when computing the quota", () => {
