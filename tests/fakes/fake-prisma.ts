@@ -10,6 +10,9 @@ export interface FakeElection {
 export interface FakeCandidate {
   id: string;
   electionId: string;
+  name?: string;
+  party?: string | null;
+  sortOrder?: number;
 }
 
 export interface FakeAccessCode {
@@ -42,6 +45,17 @@ export interface FakeBallot {
   submittedAt: Date;
 }
 
+export interface FakeAuditLog {
+  id: string;
+  actorType: string;
+  actorId: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  metadata: string | null;
+  createdAt: Date;
+}
+
 export interface FakePrismaClient {
   _data: {
     elections: FakeElection[];
@@ -49,10 +63,13 @@ export interface FakePrismaClient {
     accessCodes: FakeAccessCode[];
     voterSessions: FakeVoterSession[];
     ballots: FakeBallot[];
-    auditLogs: unknown[];
+    auditLogs: FakeAuditLog[];
   };
   election: {
-    findUnique: (args: { where: { id: string } }) => Promise<FakeElection | null>;
+    findUnique: (args: {
+      where: { id: string };
+      include?: { candidates?: { orderBy?: { sortOrder: "asc" } } };
+    }) => Promise<(FakeElection & { candidates?: FakeCandidate[] }) | null>;
     findMany: (args: { where: { id: { in: string[] } } }) => Promise<FakeElection[]>;
     create: (args: { data: Partial<FakeElection> }) => Promise<FakeElection>;
     delete: (args: { where: { id: string } }) => Promise<FakeElection>;
@@ -84,12 +101,20 @@ export interface FakePrismaClient {
   };
   ballot: {
     findUnique: (args: { where: { id: string } }) => Promise<FakeBallot | null>;
+    findMany: (args: {
+      where: { electionId: string };
+      orderBy?: { submittedAt: "asc" | "desc" };
+    }) => Promise<FakeBallot[]>;
     create: (args: { data: Partial<FakeBallot> }) => Promise<FakeBallot>;
     delete: (args: { where: { id: string } }) => Promise<FakeBallot>;
     deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
   auditLog: {
-    create: (args: { data: unknown }) => Promise<unknown>;
+    create: (args: { data: Partial<FakeAuditLog> }) => Promise<FakeAuditLog>;
+    findMany: (args: {
+      where?: { targetType?: string; targetId?: string; action?: string; actorId?: string };
+      orderBy?: { createdAt: "asc" | "desc" };
+    }) => Promise<FakeAuditLog[]>;
   };
   $transaction<T>(fnOrArray: ((tx: FakePrismaClient) => Promise<T>) | Promise<unknown>[]): Promise<T>;
 }
@@ -100,7 +125,7 @@ export function createFakePrisma(): FakePrismaClient {
   const accessCodes: FakeAccessCode[] = [];
   const voterSessions: FakeVoterSession[] = [];
   const ballots: FakeBallot[] = [];
-  const auditLogs: unknown[] = [];
+  const auditLogs: FakeAuditLog[] = [];
   let idCounter = 0;
   const nextId = () => `id_${++idCounter}`;
 
@@ -108,8 +133,24 @@ export function createFakePrisma(): FakePrismaClient {
     _data: { elections, candidates, accessCodes, voterSessions, ballots, auditLogs },
 
     election: {
-      findUnique: async ({ where }: { where: { id: string } }) =>
-        elections.find((e) => e.id === where.id) ?? null,
+      findUnique: async ({
+        where,
+        include,
+      }: {
+        where: { id: string };
+        include?: { candidates?: { orderBy?: { sortOrder: "asc" } } };
+      }) => {
+        const row = elections.find((e) => e.id === where.id);
+        if (!row) return null;
+        if (include?.candidates) {
+          const rowCandidates = candidates
+            .filter((c) => c.electionId === row.id)
+            .slice()
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+          return { ...row, candidates: rowCandidates };
+        }
+        return row;
+      },
       findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
         elections.filter((e) => where.id.in.includes(e.id)),
       create: async ({ data }: { data: Partial<FakeElection> }) => {
@@ -249,6 +290,20 @@ export function createFakePrisma(): FakePrismaClient {
 
     ballot: {
       findUnique: async ({ where }: { where: { id: string } }) => ballots.find((b) => b.id === where.id) ?? null,
+      findMany: async ({
+        where,
+        orderBy,
+      }: {
+        where: { electionId: string };
+        orderBy?: { submittedAt: "asc" | "desc" };
+      }) => {
+        const rows = ballots.filter((b) => b.electionId === where.electionId).slice();
+        if (orderBy?.submittedAt) {
+          const dir = orderBy.submittedAt === "asc" ? 1 : -1;
+          rows.sort((a, b) => dir * (a.submittedAt.getTime() - b.submittedAt.getTime()));
+        }
+        return rows;
+      },
       create: async ({ data }: { data: Partial<FakeBallot> }) => {
         const row = { id: nextId(), submittedAt: new Date(), ...data } as FakeBallot;
         ballots.push(row);
@@ -270,9 +325,37 @@ export function createFakePrisma(): FakePrismaClient {
     },
 
     auditLog: {
-      create: async ({ data }: { data: unknown }) => {
-        auditLogs.push(data);
-        return data;
+      create: async ({ data }: { data: Partial<FakeAuditLog> }) => {
+        const row = {
+          id: nextId(),
+          actorType: "system",
+          actorId: null,
+          targetType: null,
+          targetId: null,
+          metadata: null,
+          createdAt: new Date(),
+          ...data,
+        } as FakeAuditLog;
+        auditLogs.push(row);
+        return row;
+      },
+      findMany: async ({
+        where,
+        orderBy,
+      }: {
+        where?: { targetType?: string; targetId?: string; action?: string; actorId?: string };
+        orderBy?: { createdAt: "asc" | "desc" };
+      }) => {
+        let rows = auditLogs.slice();
+        if (where?.targetType !== undefined) rows = rows.filter((r) => r.targetType === where.targetType);
+        if (where?.targetId !== undefined) rows = rows.filter((r) => r.targetId === where.targetId);
+        if (where?.action !== undefined) rows = rows.filter((r) => r.action === where.action);
+        if (where?.actorId !== undefined) rows = rows.filter((r) => r.actorId === where.actorId);
+        if (orderBy?.createdAt) {
+          const dir = orderBy.createdAt === "asc" ? 1 : -1;
+          rows.sort((a, b) => dir * (a.createdAt.getTime() - b.createdAt.getTime()));
+        }
+        return rows;
       },
     },
 

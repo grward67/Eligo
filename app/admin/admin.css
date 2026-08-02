@@ -157,6 +157,21 @@
 .delete-selected-btn:disabled {
   opacity: 0.5;
 }
+
+.voting-log-control {
+  margin: 12px 0;
+}
+.voting-log-control button {
+  padding: 9px 18px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-secondary);
+  color: var(--color-secondary-content);
+  font-weight: 700;
+}
+.voting-log-control button:disabled {
+  opacity: 0.5;
+}
 .status-badge {
   font-size: 0.7rem;
   font-weight: 700;

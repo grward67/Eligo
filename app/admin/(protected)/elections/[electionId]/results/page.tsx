@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { runSTV, StvValidationError } from "@/lib/stv/count";
+import { VotingLogButton } from "@/components/admin/voting-log-button";
 
 function fmtNum(n: number): string {
   return n.toFixed(4).replace(/\.?0+$/, "");
@@ -49,6 +50,7 @@ export default async function ResultsPage({ params }: { params: { electionId: st
       <p>
         {ballots.length} ballot(s) cast. Droop quota: {result.quota}.
       </p>
+      <VotingLogButton electionId={params.electionId} />
 
       <h2>Winners</h2>
       <ol>
