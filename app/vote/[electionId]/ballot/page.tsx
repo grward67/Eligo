@@ -3,6 +3,7 @@ import { requireVoterSession } from "@/lib/auth/require-voter";
 import { getActiveVoterSession } from "@/lib/services/ballot-service";
 import { prisma } from "@/lib/db";
 import { BallotForm } from "@/components/voter/ballot-form";
+import { FptpBallotForm } from "@/components/voter/fptp-ballot-form";
 import "../../vote.css";
 
 export default async function BallotPage({ params }: { params: { electionId: string } }) {
@@ -63,11 +64,23 @@ export default async function BallotPage({ params }: { params: { electionId: str
           <span>Eligo</span>
         </div>
         <h1>{election.title}</h1>
-        <p>Rank candidates in order of preference. Tap to rank; tap again to remove.</p>
-        <BallotForm
-          electionId={electionId}
-          candidates={candidates.map((c) => ({ id: c.id, name: c.name, party: c.party }))}
-        />
+        {election.votingSystem === "FPTP" ? (
+          <>
+            <p>Tap to choose one candidate to vote for.</p>
+            <FptpBallotForm
+              electionId={electionId}
+              candidates={candidates.map((c) => ({ id: c.id, name: c.name, party: c.party }))}
+            />
+          </>
+        ) : (
+          <>
+            <p>Rank candidates in order of preference. Tap to rank; tap again to remove.</p>
+            <BallotForm
+              electionId={electionId}
+              candidates={candidates.map((c) => ({ id: c.id, name: c.name, party: c.party }))}
+            />
+          </>
+        )}
       </div>
     </main>
   );

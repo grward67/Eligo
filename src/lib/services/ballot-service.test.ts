@@ -128,6 +128,58 @@ describe("submitBallot", () => {
   });
 });
 
+describe("submitBallot (FPTP)", () => {
+  beforeEach(() => {
+    fakePrisma._data.elections.length = 0;
+    fakePrisma._data.candidates.length = 0;
+    fakePrisma._data.voterSessions.length = 0;
+    fakePrisma._data.ballots.length = 0;
+    fakePrisma._data.auditLogs.length = 0;
+  });
+
+  function seedFptp() {
+    fakePrisma._data.elections.push({ id: "e1", title: "FPTP Election", status: "OPEN", votingSystem: "FPTP" });
+    fakePrisma._data.candidates.push({ id: "c1", electionId: "e1" }, { id: "c2", electionId: "e1" });
+    fakePrisma._data.voterSessions.push({
+      id: "vs1",
+      electionId: "e1",
+      accessCodeId: "ac1",
+      ballotSubmitted: false,
+      revoked: false,
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+  }
+
+  it("accepts a single valid candidate choice", async () => {
+    seedFptp();
+    const result = await submitBallot("vs1", "e1", ["c1"]);
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(fakePrisma._data.ballots[0].ranking)).toEqual(["c1"]);
+  });
+
+  it("rejects more than one selection", async () => {
+    seedFptp();
+    const result = await submitBallot("vs1", "e1", ["c1", "c2"]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("INVALID_RANKING");
+  });
+
+  it("rejects zero selections", async () => {
+    seedFptp();
+    const result = await submitBallot("vs1", "e1", []);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("INVALID_RANKING");
+  });
+
+  it("rejects a selection that isn't a real candidate", async () => {
+    seedFptp();
+    const result = await submitBallot("vs1", "e1", ["does-not-exist"]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("INVALID_RANKING");
+  });
+});
+
 describe("deleteBallot", () => {
   beforeEach(() => {
     fakePrisma._data.elections.length = 0;

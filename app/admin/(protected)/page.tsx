@@ -9,7 +9,9 @@ export default async function AdminDashboardPage() {
     <div>
       <h1>Elections</h1>
       <CreateElectionForm />
-      <ElectionsList elections={elections.map((e) => ({ id: e.id, title: e.title, status: e.status }))} />
+      <ElectionsList
+        elections={elections.map((e) => ({ id: e.id, title: e.title, status: e.status, votingSystem: e.votingSystem }))}
+      />
     </div>
   );
 }

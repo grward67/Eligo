@@ -8,13 +8,20 @@ interface ElectionSummary {
   id: string;
   title: string;
   status: string;
+  votingSystem: string;
 }
+
+const VOTING_SYSTEM_LABELS: Record<string, string> = {
+  STV: "Single Transferable Vote (STV)",
+  FPTP: "First Past the Post (FPTP)",
+};
 
 export function ElectionsList({ elections }: { elections: ElectionSummary[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [changingId, setChangingId] = useState<string | null>(null);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -23,6 +30,27 @@ export function ElectionsList({ elections }: { elections: ElectionSummary[] }) {
       else next.add(id);
       return next;
     });
+  }
+
+  async function handleVotingSystemChange(electionId: string, votingSystem: string) {
+    setChangingId(electionId);
+    setError(null);
+
+    const res = await fetch(`/api/admin/elections/${electionId}/voting-system`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ votingSystem }),
+    });
+
+    setChangingId(null);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Could not update the ballot type.");
+      return;
+    }
+
+    router.refresh();
   }
 
   async function handleDelete() {
@@ -79,6 +107,19 @@ export function ElectionsList({ elections }: { elections: ElectionSummary[] }) {
               aria-label={`Select ${e.title}`}
             />
             <Link href={`/admin/elections/${e.id}`}>{e.title}</Link>
+            {e.status === "DRAFT" ? (
+              <select
+                value={e.votingSystem}
+                disabled={changingId === e.id}
+                onChange={(ev) => handleVotingSystemChange(e.id, ev.target.value)}
+                aria-label={`Ballot type for ${e.title}`}
+              >
+                <option value="STV">Single Transferable Vote (STV)</option>
+                <option value="FPTP">First Past the Post (FPTP)</option>
+              </select>
+            ) : (
+              <span className="voting-system-label">{VOTING_SYSTEM_LABELS[e.votingSystem] ?? e.votingSystem}</span>
+            )}
             <span className={`status-badge status-${e.status.toLowerCase()}`}>{e.status}</span>
           </li>
         ))}

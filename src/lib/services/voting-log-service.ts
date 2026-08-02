@@ -17,13 +17,14 @@ export interface VotingLogBallot {
 
 export interface VotingLog {
   electionTitle: string;
+  votingSystem: string;
   startedAt: string | null;
   endedAt: string | null;
   candidates: VotingLogCandidate[];
   ballots: VotingLogBallot[];
 }
 
-/** Builds the data behind the "Voting log" PDF export (raw per-ballot rankings). */
+/** Builds the data behind the "Voting log" PDF export (raw per-ballot rankings/choices). */
 export async function buildVotingLog(electionId: string): Promise<VotingLog | null> {
   const election = await prisma.election.findUnique({
     where: { id: electionId },
@@ -41,6 +42,7 @@ export async function buildVotingLog(electionId: string): Promise<VotingLog | nu
 
   return {
     electionTitle: election.title,
+    votingSystem: election.votingSystem,
     startedAt,
     endedAt,
     candidates: election.candidates.map((c) => ({ id: c.id, name: c.name, party: c.party })),

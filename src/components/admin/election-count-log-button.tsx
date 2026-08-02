@@ -25,16 +25,30 @@ interface CountLogRound {
   transferExhausted: number;
 }
 
+interface FptpCountLogTally {
+  name: string;
+  party: string | null;
+  votes: number;
+  status: string;
+}
+
 interface ElectionCountLog {
   electionTitle: string;
+  votingSystem: string;
   startedAt: string | null;
   endedAt: string | null;
-  quota: number;
+  quota?: number;
   totalValidVotes: number;
   seats: number;
-  rounds: CountLogRound[];
+  rounds?: CountLogRound[];
+  tallies?: FptpCountLogTally[];
   winners: { name: string; party: string | null }[];
 }
+
+const VOTING_SYSTEM_LABELS: Record<string, string> = {
+  STV: "Single Transferable Vote (STV)",
+  FPTP: "First Past the Post (FPTP)",
+};
 
 function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : "Not recorded";
@@ -100,6 +114,8 @@ export function ElectionCountLogButton({ electionId }: { electionId: string }) {
       doc.text(`Actual start date: ${formatDate(log.startedAt)}`, marginLeft, y);
       y += 7;
       doc.text(`Actual end date: ${formatDate(log.endedAt)}`, marginLeft, y);
+      y += 7;
+      doc.text(`Ballot type: ${VOTING_SYSTEM_LABELS[log.votingSystem] ?? log.votingSystem}`, marginLeft, y);
       y += 10;
 
       function ensureSpace(neededHeight: number) {
@@ -109,40 +125,52 @@ export function ElectionCountLogButton({ electionId }: { electionId: string }) {
         }
       }
 
-      for (const round of log.rounds) {
-        ensureSpace(20);
-
-        doc.setFontSize(13);
-        doc.text(`Round ${round.number} — ${round.action}`, marginLeft, y);
-        y += 6;
-
+      if (log.votingSystem === "FPTP" && log.tallies) {
         autoTable(doc, {
           startY: y,
           head: [["Candidate", "Party", "Votes", "Status"]],
-          body: round.tallies.map((t) => [t.name, t.party ?? "", fmtNum(t.votes), t.status]),
+          body: log.tallies.map((t) => [t.name, t.party ?? "", String(t.votes), t.status]),
           styles: { fontSize: 9 },
           headStyles: { fillColor: [8, 77, 73] },
           margin: { left: marginLeft, right: marginLeft },
         });
         y = getLastAutoTableFinalY(doc, y) + 6;
+      } else {
+        for (const round of log.rounds ?? []) {
+          ensureSpace(20);
 
-        ensureSpace(12);
-        doc.setFontSize(9);
-        const noteLines = doc.splitTextToSize(round.note, contentWidth);
-        doc.text(noteLines, marginLeft, y);
-        y += noteLines.length * 5 + 2;
-
-        if (round.transfersIn.length > 0 || round.transferExhausted > 1e-9) {
-          const parts = round.transfersIn.map((t) => `${t.name} +${fmtNum(t.amount)}`);
-          if (round.transferExhausted > 1e-9) {
-            parts.push(`exhausted +${fmtNum(round.transferExhausted)}`);
-          }
-          ensureSpace(10);
-          const transferLines = doc.splitTextToSize(`Transferred: ${parts.join(", ")}`, contentWidth);
-          doc.text(transferLines, marginLeft, y);
-          y += transferLines.length * 5 + 6;
-        } else {
+          doc.setFontSize(13);
+          doc.text(`Round ${round.number} — ${round.action}`, marginLeft, y);
           y += 6;
+
+          autoTable(doc, {
+            startY: y,
+            head: [["Candidate", "Party", "Votes", "Status"]],
+            body: round.tallies.map((t) => [t.name, t.party ?? "", fmtNum(t.votes), t.status]),
+            styles: { fontSize: 9 },
+            headStyles: { fillColor: [8, 77, 73] },
+            margin: { left: marginLeft, right: marginLeft },
+          });
+          y = getLastAutoTableFinalY(doc, y) + 6;
+
+          ensureSpace(12);
+          doc.setFontSize(9);
+          const noteLines = doc.splitTextToSize(round.note, contentWidth);
+          doc.text(noteLines, marginLeft, y);
+          y += noteLines.length * 5 + 2;
+
+          if (round.transfersIn.length > 0 || round.transferExhausted > 1e-9) {
+            const parts = round.transfersIn.map((t) => `${t.name} +${fmtNum(t.amount)}`);
+            if (round.transferExhausted > 1e-9) {
+              parts.push(`exhausted +${fmtNum(round.transferExhausted)}`);
+            }
+            ensureSpace(10);
+            const transferLines = doc.splitTextToSize(`Transferred: ${parts.join(", ")}`, contentWidth);
+            doc.text(transferLines, marginLeft, y);
+            y += transferLines.length * 5 + 6;
+          } else {
+            y += 6;
+          }
         }
       }
 

@@ -8,6 +8,7 @@ import { deleteElections } from "@/lib/services/election-service";
 const bodySchema = z.object({
   title: z.string().min(1),
   seats: z.number().int().min(1),
+  votingSystem: z.enum(["STV", "FPTP"]).default("STV"),
 });
 
 export async function POST(request: NextRequest) {
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
   }
 
   const election = await prisma.election.create({
-    data: { title: parsed.data.title, seats: parsed.data.seats },
+    data: { title: parsed.data.title, seats: parsed.data.seats, votingSystem: parsed.data.votingSystem },
   });
 
   await writeAuditLog({
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     action: "election.create",
     targetType: "Election",
     targetId: election.id,
-    metadata: { title: election.title, seats: election.seats },
+    metadata: { title: election.title, seats: election.seats, votingSystem: election.votingSystem },
   });
 
   return NextResponse.json({ ok: true, election });

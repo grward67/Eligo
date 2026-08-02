@@ -23,6 +23,9 @@ model Election {
   title         String
   seats         Int
   status        String         @default("DRAFT")
+  // "STV" | "FPTP", validated at the application layer like `status`.
+  // Editable only while status is DRAFT (enforced in the API, not here).
+  votingSystem  String         @default("STV")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   candidates    Candidate[]

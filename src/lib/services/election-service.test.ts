@@ -4,7 +4,7 @@ import { createFakePrisma } from "../../../tests/fakes/fake-prisma";
 const fakePrisma = createFakePrisma();
 vi.mock("@/lib/db", () => ({ prisma: fakePrisma }));
 
-const { deleteElections } = await import("./election-service");
+const { deleteElections, updateVotingSystem } = await import("./election-service");
 
 describe("deleteElections", () => {
   beforeEach(() => {
@@ -94,5 +94,65 @@ describe("deleteElections", () => {
     const result = await deleteElections(["does-not-exist"], "admin1");
     expect(result.deletedIds).toEqual([]);
     expect(result.blocked).toEqual([]);
+  });
+});
+
+describe("updateVotingSystem", () => {
+  beforeEach(() => {
+    fakePrisma._data.elections.length = 0;
+    fakePrisma._data.ballots.length = 0;
+    fakePrisma._data.auditLogs.length = 0;
+  });
+
+  it("changes the voting system while the election is still DRAFT with no ballots", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Draft", status: "DRAFT", votingSystem: "STV" });
+
+    const result = await updateVotingSystem("e1", "FPTP", "admin1");
+
+    expect(result.ok).toBe(true);
+    expect(fakePrisma._data.elections[0].votingSystem).toBe("FPTP");
+    expect(fakePrisma._data.auditLogs).toHaveLength(1);
+  });
+
+  it("refuses to change it once the election is OPEN", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Live", status: "OPEN", votingSystem: "STV" });
+
+    const result = await updateVotingSystem("e1", "FPTP", "admin1");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("NOT_DRAFT");
+    expect(fakePrisma._data.elections[0].votingSystem).toBe("STV");
+  });
+
+  it("refuses to change it once the election is CLOSED", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Done", status: "CLOSED", votingSystem: "STV" });
+
+    const result = await updateVotingSystem("e1", "FPTP", "admin1");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("NOT_DRAFT");
+  });
+
+  it("refuses to change it if ballots already exist, even if somehow back in DRAFT", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Weird state", status: "DRAFT", votingSystem: "STV" });
+    fakePrisma._data.ballots.push({
+      id: "b1",
+      electionId: "e1",
+      voterSessionId: "vs1",
+      ranking: "[]",
+      submittedAt: new Date(),
+    });
+
+    const result = await updateVotingSystem("e1", "FPTP", "admin1");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("HAS_BALLOTS");
+    expect(fakePrisma._data.elections[0].votingSystem).toBe("STV");
+  });
+
+  it("reports NOT_FOUND for an election that doesn't exist", async () => {
+    const result = await updateVotingSystem("does-not-exist", "FPTP", "admin1");
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("NOT_FOUND");
   });
 });

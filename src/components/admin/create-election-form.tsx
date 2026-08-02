@@ -7,6 +7,7 @@ export function CreateElectionForm() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [seats, setSeats] = useState(1);
+  const [votingSystem, setVotingSystem] = useState("STV");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -18,7 +19,7 @@ export function CreateElectionForm() {
     const res = await fetch("/api/admin/elections", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, seats }),
+      body: JSON.stringify({ title, seats, votingSystem }),
     });
 
     setSubmitting(false);
@@ -31,6 +32,7 @@ export function CreateElectionForm() {
 
     setTitle("");
     setSeats(1);
+    setVotingSystem("STV");
     router.refresh();
   }
 
@@ -48,6 +50,13 @@ export function CreateElectionForm() {
           value={seats}
           onChange={(e) => setSeats(parseInt(e.target.value, 10) || 1)}
         />
+      </label>
+      <label>
+        Ballot type
+        <select value={votingSystem} onChange={(e) => setVotingSystem(e.target.value)}>
+          <option value="STV">Single Transferable Vote (STV)</option>
+          <option value="FPTP">First Past the Post (FPTP)</option>
+        </select>
       </label>
       {error && <p className="form-error">{error}</p>}
       <button type="submit" disabled={submitting}>

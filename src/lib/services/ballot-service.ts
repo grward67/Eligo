@@ -47,8 +47,13 @@ export async function submitBallot(
   const candidateIds = new Set(candidates.map((c) => c.id));
   const uniqueRanking = new Set(ranking);
 
+  // FPTP is a single choice, not a ranking: exactly one valid candidate, no
+  // more and no less. STV keeps its original "at least one, no duplicates"
+  // rule (a voter doesn't have to rank every candidate).
   const rankingValid =
-    ranking.length > 0 && ranking.length === uniqueRanking.size && ranking.every((id) => candidateIds.has(id));
+    election.votingSystem === "FPTP"
+      ? ranking.length === 1 && candidateIds.has(ranking[0])
+      : ranking.length > 0 && ranking.length === uniqueRanking.size && ranking.every((id) => candidateIds.has(id));
 
   if (!rankingValid) {
     return { ok: false, error: "INVALID_RANKING" };

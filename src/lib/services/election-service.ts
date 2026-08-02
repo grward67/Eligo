@@ -51,3 +51,46 @@ export async function deleteElections(electionIds: string[], deletedById: string
     blocked: blocked.map((e) => ({ id: e.id, title: e.title })),
   };
 }
+
+export interface UpdateVotingSystemResult {
+  ok: boolean;
+  error?: "NOT_FOUND" | "NOT_DRAFT" | "HAS_BALLOTS";
+}
+
+/**
+ * The ballot type can only be changed while an election is still DRAFT --
+ * once it's been opened (or even if reverted back to DRAFT after ballots
+ * exist), STV and FPTP ballots aren't interchangeable, so switching would
+ * make existing data nonsensical for whichever counting engine ran next.
+ */
+export async function updateVotingSystem(
+  electionId: string,
+  votingSystem: "STV" | "FPTP",
+  updatedById: string
+): Promise<UpdateVotingSystemResult> {
+  const election = await prisma.election.findUnique({ where: { id: electionId } });
+  if (!election) {
+    return { ok: false, error: "NOT_FOUND" };
+  }
+  if (election.status !== "DRAFT") {
+    return { ok: false, error: "NOT_DRAFT" };
+  }
+
+  const existingBallots = await prisma.ballot.findMany({ where: { electionId } });
+  if (existingBallots.length > 0) {
+    return { ok: false, error: "HAS_BALLOTS" };
+  }
+
+  await prisma.election.update({ where: { id: electionId }, data: { votingSystem } });
+
+  await writeAuditLog({
+    actorType: "admin",
+    actorId: updatedById,
+    action: "election.voting_system_change",
+    targetType: "Election",
+    targetId: electionId,
+    metadata: { votingSystem },
+  });
+
+  return { ok: true };
+}

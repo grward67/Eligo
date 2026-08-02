@@ -17,11 +17,17 @@ interface VotingLogBallot {
 
 interface VotingLog {
   electionTitle: string;
+  votingSystem: string;
   startedAt: string | null;
   endedAt: string | null;
   candidates: VotingLogCandidate[];
   ballots: VotingLogBallot[];
 }
+
+const VOTING_SYSTEM_LABELS: Record<string, string> = {
+  STV: "Single Transferable Vote (STV)",
+  FPTP: "First Past the Post (FPTP)",
+};
 
 function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : "Not recorded";
@@ -73,14 +79,21 @@ export function VotingLogButton({ electionId }: { electionId: string }) {
       doc.text(`Actual start date: ${formatDate(log.startedAt)}`, 14, y);
       y += 7;
       doc.text(`Actual end date: ${formatDate(log.endedAt)}`, 14, y);
+      y += 7;
+      doc.text(`Ballot type: ${VOTING_SYSTEM_LABELS[log.votingSystem] ?? log.votingSystem}`, 14, y);
       y += 8;
 
+      const isFptp = log.votingSystem === "FPTP";
       const head = [["Ballot #", ...log.candidates.map((c) => c.name)]];
       const body = log.ballots.map((b) => {
         const row = [String(b.ballotNumber)];
         for (const c of log.candidates) {
           const preference = b.ranking.indexOf(c.id);
-          row.push(preference === -1 ? "" : String(preference + 1));
+          if (isFptp) {
+            row.push(preference === -1 ? "" : "✓");
+          } else {
+            row.push(preference === -1 ? "" : String(preference + 1));
+          }
         }
         return row;
       });

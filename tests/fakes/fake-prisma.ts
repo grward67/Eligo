@@ -5,6 +5,8 @@ export interface FakeElection {
   id: string;
   title: string;
   status: string;
+  votingSystem?: string;
+  seats?: number;
 }
 
 export interface FakeCandidate {
@@ -72,6 +74,7 @@ export interface FakePrismaClient {
     }) => Promise<(FakeElection & { candidates?: FakeCandidate[] }) | null>;
     findMany: (args: { where: { id: { in: string[] } } }) => Promise<FakeElection[]>;
     create: (args: { data: Partial<FakeElection> }) => Promise<FakeElection>;
+    update: (args: { where: { id: string }; data: Partial<FakeElection> }) => Promise<FakeElection>;
     delete: (args: { where: { id: string } }) => Promise<FakeElection>;
   };
   candidate: {
@@ -154,8 +157,20 @@ export function createFakePrisma(): FakePrismaClient {
       findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
         elections.filter((e) => where.id.in.includes(e.id)),
       create: async ({ data }: { data: Partial<FakeElection> }) => {
-        const row = { id: nextId(), title: "Untitled", status: "DRAFT", ...data } as FakeElection;
+        const row = {
+          id: nextId(),
+          title: "Untitled",
+          status: "DRAFT",
+          votingSystem: "STV",
+          ...data,
+        } as FakeElection;
         elections.push(row);
+        return row;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FakeElection> }) => {
+        const row = elections.find((e) => e.id === where.id);
+        if (!row) throw new Error("election not found");
+        Object.assign(row, data);
         return row;
       },
       delete: async ({ where }: { where: { id: string } }) => {
