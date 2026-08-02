@@ -91,7 +91,7 @@ export function ElectionCountLogButton({ electionId }: { electionId: string }) {
       }
 
       doc.setFontSize(18);
-      doc.text("Voting log", marginLeft + 18, 20);
+      doc.text("Election count Log", marginLeft + 18, 20);
 
       doc.setFontSize(11);
       let y = 32;
