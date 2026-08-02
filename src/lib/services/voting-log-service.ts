@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { getElectionActualDates } from "@/lib/services/election-dates-service";
 
 export interface VotingLogCandidate {
   id: string;
@@ -16,15 +17,13 @@ export interface VotingLogBallot {
 
 export interface VotingLog {
   electionTitle: string;
-  /** First time the election was set to OPEN, if ever. */
   startedAt: string | null;
-  /** Most recent time the election was set to CLOSED, if ever. */
   endedAt: string | null;
   candidates: VotingLogCandidate[];
   ballots: VotingLogBallot[];
 }
 
-/** Builds the data behind the "Voting log" PDF export: derives the actual open/close times from the audit trail rather than from a dedicated column, since status changes are already recorded there. */
+/** Builds the data behind the "Voting log" PDF export (raw per-ballot rankings). */
 export async function buildVotingLog(electionId: string): Promise<VotingLog | null> {
   const election = await prisma.election.findUnique({
     where: { id: electionId },
@@ -33,29 +32,7 @@ export async function buildVotingLog(electionId: string): Promise<VotingLog | nu
 
   if (!election) return null;
 
-  const statusChanges = await prisma.auditLog.findMany({
-    where: { targetType: "Election", targetId: electionId, action: "election.status_change" },
-    orderBy: { createdAt: "asc" },
-  });
-
-  let startedAt: Date | null = null;
-  let endedAt: Date | null = null;
-
-  for (const log of statusChanges) {
-    if (!log.metadata) continue;
-    let status: unknown;
-    try {
-      status = JSON.parse(log.metadata).status;
-    } catch {
-      continue;
-    }
-    if (status === "OPEN" && !startedAt) {
-      startedAt = log.createdAt;
-    }
-    if (status === "CLOSED") {
-      endedAt = log.createdAt;
-    }
-  }
+  const { startedAt, endedAt } = await getElectionActualDates(electionId);
 
   const ballots = await prisma.ballot.findMany({
     where: { electionId },
@@ -64,8 +41,8 @@ export async function buildVotingLog(electionId: string): Promise<VotingLog | nu
 
   return {
     electionTitle: election.title,
-    startedAt: startedAt ? startedAt.toISOString() : null,
-    endedAt: endedAt ? endedAt.toISOString() : null,
+    startedAt,
+    endedAt,
     candidates: election.candidates.map((c) => ({ id: c.id, name: c.name, party: c.party })),
     ballots: ballots.map((b, i) => ({
       ballotNumber: i + 1,

@@ -66,6 +66,35 @@ describe("runSTV", () => {
     const daveTally = result.rounds.at(-1)!.tallies.find((t) => t.id === "D")!.votes;
     const finalExhausted = result.rounds.at(-1)!.cumulativeExhausted;
     expect(aliceTally + daveTally + finalExhausted).toBeCloseTo(10);
+
+    // Per-round transfer breakdown, hand-traced ballot by ballot:
+    // Round 1 (elect Alice, surplus 1): her 5 ballots (each now worth 0.2)
+    // land on b1->B, b2->C, b3->D, b4->B, b5->C -> B and C each get two
+    // (0.4), D gets one (0.2). Total transferred = 1.0 = the surplus.
+    expect(result.rounds[0].transfersIn).toEqual({ B: 0.4, C: 0.4, D: 0.2 });
+    expect(result.rounds[0].transferExhausted).toBeCloseTo(0);
+
+    // Round 2 (eliminate Carol, 1.4): b8 [C,D] transfers its full value (1)
+    // to D; b2/b5 [A,C] have no further preference and exhaust (0.2 each).
+    // 1 + 0.4 = 1.4, matching Carol's round-2 total exactly.
+    expect(result.rounds[1].transfersIn).toEqual({ D: 1 });
+    expect(result.rounds[1].transferExhausted).toBeCloseTo(0.4);
+
+    // Round 3 (eliminate Bob, 2.4): b7 [B,D] transfers its value (1) to D;
+    // b1/b4 [A,B] (0.2 each) and b6 [B,C] (1, since C is also already
+    // eliminated) all have nowhere left to go and exhaust. 1 + 1.4 = 2.4,
+    // matching Bob's round-3 total exactly.
+    expect(result.rounds[2].transfersIn).toEqual({ D: 1 });
+    expect(result.rounds[2].transferExhausted).toBeCloseTo(1.4);
+
+    // Round 4 ends the count -- nothing follows it to observe a transfer in.
+    expect(result.rounds[3].transfersIn).toEqual({});
+    expect(result.rounds[3].transferExhausted).toBe(0);
+
+    // Each round's transferExhausted must equal the next round's exhausted.
+    for (let i = 0; i < result.rounds.length - 1; i++) {
+      expect(result.rounds[i].transferExhausted).toBeCloseTo(result.rounds[i + 1].exhausted);
+    }
   });
 
   it("ignores ballots with an empty ranking when computing the quota", () => {

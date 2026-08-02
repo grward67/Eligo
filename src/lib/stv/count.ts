@@ -36,6 +36,16 @@ export interface StvRound {
   eliminatedId?: string;
   surplus?: number;
   transferValue?: number;
+  /**
+   * Votes transferred to each candidate as a direct result of THIS round's
+   * elect/eliminate action, keyed by candidate id -- observed by comparing
+   * the following round's ballot assignments to this round's. Always empty
+   * on the round that ends the count (there is no following round to
+   * observe a transfer in) and on round 1 (nothing precedes it).
+   */
+  transfersIn: Record<string, number>;
+  /** Votes that became exhausted specifically because of this round's action (equal to the following round's `exhausted`, but kept here too so each round is self-describing). */
+  transferExhausted: number;
 }
 
 export interface StvResult {
@@ -129,8 +139,31 @@ export function runSTV(
 
   while (seatsFilled < seats && roundNum < maxRounds) {
     roundNum++;
+
+    // Snapshot each ballot's attribution as it stood BEFORE this round's
+    // assign() call, so any change caused by it can be attributed back to
+    // whatever was elected/eliminated in the previous round.
+    const previousAttribution = work.map((b) => (b.active ? b.currentCandidate : undefined));
+
     const { votes, exhausted } = assign();
     cumulativeExhausted += exhausted;
+
+    if (rounds.length > 0) {
+      const previousRound = rounds[rounds.length - 1];
+      work.forEach((b, i) => {
+        const prev = previousAttribution[i];
+        // undefined = already exhausted before this round, or round 1 (no
+        // prior attribution) -- neither can be a "new" transfer.
+        if (prev === undefined || prev === null) return;
+        const now = b.active ? b.currentCandidate : null;
+        if (now === prev) return; // unaffected by the previous round's action
+        if (now === null) {
+          previousRound.transferExhausted += b.value;
+        } else {
+          previousRound.transfersIn[now] = (previousRound.transfersIn[now] ?? 0) + b.value;
+        }
+      });
+    }
     const hopefulIds = candidates.filter((c) => status[c.id] === "hopeful").map((c) => c.id);
     const remainingSeats = seats - seatsFilled;
 
@@ -156,6 +189,8 @@ export function runSTV(
         tallies,
         exhausted,
         cumulativeExhausted,
+        transfersIn: {},
+        transferExhausted: 0,
         electedIds: hopefulIds.slice(),
         note:
           `Only ${hopefulIds.length} hopeful candidate(s) remain for ${remainingSeats} open seat(s), so ` +
@@ -194,6 +229,8 @@ export function runSTV(
         tallies,
         exhausted,
         cumulativeExhausted,
+        transfersIn: {},
+        transferExhausted: 0,
         electedId: electId,
         surplus,
         transferValue,
@@ -214,6 +251,8 @@ export function runSTV(
       tallies,
       exhausted,
       cumulativeExhausted,
+      transfersIn: {},
+      transferExhausted: 0,
       eliminatedId: elimId,
       note:
         `${elimCandidate?.name ?? elimId} has the fewest votes (${fmt(votes[elimId] ?? 0)}) and no candidate has ` +
