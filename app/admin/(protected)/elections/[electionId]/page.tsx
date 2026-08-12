@@ -24,6 +24,11 @@ export default async function ElectionDetailPage({ params }: { params: { electio
       </p>
       <ElectionStatusControl electionId={election.id} status={election.status} />
 
+      <nav className="election-subnav">
+        <Link href={`/admin/elections/${election.id}/codes`}>Access codes</Link>
+        <Link href={`/admin/elections/${election.id}/results`}>Results</Link>
+      </nav>
+
       <h2>Automatic start/end (optional)</h2>
       <ElectionScheduleForm
         electionId={election.id}
@@ -32,11 +37,6 @@ export default async function ElectionDetailPage({ params }: { params: { electio
         scheduledEndAt={election.scheduledEndAt?.toISOString() ?? null}
         scheduleTimezone={election.scheduleTimezone}
       />
-
-      <nav className="election-subnav">
-        <Link href={`/admin/elections/${election.id}/codes`}>Access codes</Link>
-        <Link href={`/admin/elections/${election.id}/results`}>Results</Link>
-      </nav>
 
       <h2>Candidates</h2>
       <ul>
