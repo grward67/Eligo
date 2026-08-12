@@ -3,12 +3,15 @@ import { runSTV, StvValidationError } from "@/lib/stv/count";
 import { runFPTP, FptpValidationError } from "@/lib/fptp/count";
 import { VotingLogButton } from "@/components/admin/voting-log-button";
 import { ElectionCountLogButton } from "@/components/admin/election-count-log-button";
+import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
 
 function fmtNum(n: number): string {
   return n.toFixed(4).replace(/\.?0+$/, "");
 }
 
 export default async function ResultsPage({ params }: { params: { electionId: string } }) {
+  await applyDueScheduleTransitions(params.electionId);
+
   const election = await prisma.election.findUnique({
     where: { id: params.electionId },
     include: { candidates: true },

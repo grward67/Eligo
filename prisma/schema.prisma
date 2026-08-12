@@ -19,19 +19,29 @@ model Admin {
 }
 
 model Election {
-  id            String         @id @default(cuid())
-  title         String
-  seats         Int
-  status        String         @default("DRAFT")
+  id               String         @id @default(cuid())
+  title            String
+  seats            Int
+  status           String         @default("DRAFT")
   // "STV" | "FPTP", validated at the application layer like `status`.
   // Editable only while status is DRAFT (enforced in the API, not here).
-  votingSystem  String         @default("STV")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  candidates    Candidate[]
-  accessCodes   AccessCode[]
-  voterSessions VoterSession[]
-  ballots       Ballot[]
+  votingSystem     String         @default("STV")
+  // Optional auto-scheduling: when set, a lazy check (run wherever status
+  // is read/enforced -- no cron needed) flips DRAFT->OPEN and OPEN->CLOSED
+  // once these instants pass, backdating the resulting audit log entry to
+  // the scheduled instant so "actual" dates stay accurate either way.
+  // scheduledStartAt is only ever set/editable while status is DRAFT.
+  scheduledStartAt DateTime?
+  scheduledEndAt   DateTime?
+  // IANA zone the two instants above were entered in (e.g. "Europe/London"),
+  // kept so they can be redisplayed in the timezone the admin actually chose.
+  scheduleTimezone String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  candidates       Candidate[]
+  accessCodes      AccessCode[]
+  voterSessions    VoterSession[]
+  ballots          Ballot[]
 }
 
 model Candidate {

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit/log";
+import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
 
 export interface SubmitBallotSuccess {
   ok: true;
@@ -37,6 +38,8 @@ export async function submitBallot(
   if (session.ballotSubmitted) {
     return { ok: false, error: "ALREADY_SUBMITTED" };
   }
+
+  await applyDueScheduleTransitions(electionId);
 
   const election = await prisma.election.findUnique({ where: { id: electionId } });
   if (!election || election.status !== "OPEN") {

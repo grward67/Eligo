@@ -3,8 +3,12 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { CandidateForm } from "@/components/admin/candidate-form";
 import { ElectionStatusControl } from "@/components/admin/election-status-control";
+import { ElectionScheduleForm } from "@/components/admin/election-schedule-form";
+import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
 
 export default async function ElectionDetailPage({ params }: { params: { electionId: string } }) {
+  await applyDueScheduleTransitions(params.electionId);
+
   const election = await prisma.election.findUnique({
     where: { id: params.electionId },
     include: { candidates: { orderBy: { sortOrder: "asc" } } },
@@ -19,6 +23,15 @@ export default async function ElectionDetailPage({ params }: { params: { electio
         Seats: {election.seats} &middot; Status: {election.status}
       </p>
       <ElectionStatusControl electionId={election.id} status={election.status} />
+
+      <h2>Automatic start/end (optional)</h2>
+      <ElectionScheduleForm
+        electionId={election.id}
+        status={election.status as "DRAFT" | "OPEN" | "CLOSED"}
+        scheduledStartAt={election.scheduledStartAt?.toISOString() ?? null}
+        scheduledEndAt={election.scheduledEndAt?.toISOString() ?? null}
+        scheduleTimezone={election.scheduleTimezone}
+      />
 
       <nav className="election-subnav">
         <Link href={`/admin/elections/${election.id}/codes`}>Access codes</Link>

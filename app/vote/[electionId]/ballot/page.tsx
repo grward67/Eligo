@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireVoterSession } from "@/lib/auth/require-voter";
 import { getActiveVoterSession } from "@/lib/services/ballot-service";
+import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
 import { prisma } from "@/lib/db";
 import { BallotForm } from "@/components/voter/ballot-form";
 import { FptpBallotForm } from "@/components/voter/fptp-ballot-form";
@@ -34,6 +35,7 @@ export default async function BallotPage({ params }: { params: { electionId: str
     );
   }
 
+  await applyDueScheduleTransitions(electionId);
   const election = await prisma.election.findUnique({ where: { id: electionId } });
 
   if (!election || election.status !== "OPEN") {

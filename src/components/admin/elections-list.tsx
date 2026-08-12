@@ -9,6 +9,8 @@ interface ElectionSummary {
   title: string;
   status: string;
   votingSystem: string;
+  startLabel: string | null;
+  endLabel: string | null;
 }
 
 const VOTING_SYSTEM_LABELS: Record<string, string> = {
@@ -100,27 +102,35 @@ export function ElectionsList({ elections }: { elections: ElectionSummary[] }) {
       <ul className="election-list">
         {elections.map((e) => (
           <li key={e.id}>
-            <input
-              type="checkbox"
-              checked={selected.has(e.id)}
-              onChange={() => toggle(e.id)}
-              aria-label={`Select ${e.title}`}
-            />
-            <Link href={`/admin/elections/${e.id}`}>{e.title}</Link>
-            {e.status === "DRAFT" ? (
-              <select
-                value={e.votingSystem}
-                disabled={changingId === e.id}
-                onChange={(ev) => handleVotingSystemChange(e.id, ev.target.value)}
-                aria-label={`Ballot type for ${e.title}`}
-              >
-                <option value="STV">Single Transferable Vote (STV)</option>
-                <option value="FPTP">First Past the Post (FPTP)</option>
-              </select>
-            ) : (
-              <span className="voting-system-label">{VOTING_SYSTEM_LABELS[e.votingSystem] ?? e.votingSystem}</span>
+            <div className="election-row">
+              <input
+                type="checkbox"
+                checked={selected.has(e.id)}
+                onChange={() => toggle(e.id)}
+                aria-label={`Select ${e.title}`}
+              />
+              <Link href={`/admin/elections/${e.id}`}>{e.title}</Link>
+              {e.status === "DRAFT" ? (
+                <select
+                  value={e.votingSystem}
+                  disabled={changingId === e.id}
+                  onChange={(ev) => handleVotingSystemChange(e.id, ev.target.value)}
+                  aria-label={`Ballot type for ${e.title}`}
+                >
+                  <option value="STV">Single Transferable Vote (STV)</option>
+                  <option value="FPTP">First Past the Post (FPTP)</option>
+                </select>
+              ) : (
+                <span className="voting-system-label">{VOTING_SYSTEM_LABELS[e.votingSystem] ?? e.votingSystem}</span>
+              )}
+              <span className={`status-badge status-${e.status.toLowerCase()}`}>{e.status}</span>
+            </div>
+            {(e.startLabel || e.endLabel) && (
+              <p className="election-schedule-labels">
+                {e.startLabel && <span>Start: {e.startLabel}</span>}
+                {e.endLabel && <span>End: {e.endLabel}</span>}
+              </p>
             )}
-            <span className={`status-badge status-${e.status.toLowerCase()}`}>{e.status}</span>
           </li>
         ))}
       </ul>

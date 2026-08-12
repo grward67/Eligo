@@ -7,6 +7,9 @@ export interface FakeElection {
   status: string;
   votingSystem?: string;
   seats?: number;
+  scheduledStartAt?: Date | null;
+  scheduledEndAt?: Date | null;
+  scheduleTimezone?: string | null;
 }
 
 export interface FakeCandidate {

@@ -9,6 +9,8 @@ export interface AuditLogInput {
   targetType?: string | null;
   targetId?: string | null;
   metadata?: Record<string, unknown> | null;
+  /** Backdates the entry -- used only for system-applied scheduled transitions, so the recorded instant matches the scheduled time rather than whenever the lazy check happened to run. Omit to use the write time (the default for every other caller). */
+  createdAt?: Date;
 }
 
 /** Central write path for every auditable event: admin actions, code use, ballot submission. */
@@ -21,6 +23,7 @@ export async function writeAuditLog(input: AuditLogInput): Promise<void> {
       targetType: input.targetType ?? null,
       targetId: input.targetId ?? null,
       metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     },
   });
 }

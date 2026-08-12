@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { hashAccessCode } from "@/lib/auth/access-code";
 import { writeAuditLog } from "@/lib/audit/log";
+import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
 
 export interface VerifyCodeSuccess {
   ok: true;
@@ -30,6 +31,8 @@ const VOTER_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2h, matches voter-session.ts
  * still be verified by multiple different voters.
  */
 export async function verifyAccessCode(electionId: string, rawCode: string): Promise<VerifyCodeResult> {
+  await applyDueScheduleTransitions(electionId);
+
   const election = await prisma.election.findUnique({ where: { id: electionId } });
   if (!election || election.status !== "OPEN") {
     return { ok: false, error: "ELECTION_NOT_OPEN" };

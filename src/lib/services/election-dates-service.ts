@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
 
 export interface ElectionActualDates {
   /** First time the election was set to OPEN, if ever. */
@@ -13,6 +14,8 @@ export interface ElectionActualDates {
  * voting window is derived from there instead of adding a new column.
  */
 export async function getElectionActualDates(electionId: string): Promise<ElectionActualDates> {
+  await applyDueScheduleTransitions(electionId);
+
   const statusChanges = await prisma.auditLog.findMany({
     where: { targetType: "Election", targetId: electionId, action: "election.status_change" },
     orderBy: { createdAt: "asc" },
