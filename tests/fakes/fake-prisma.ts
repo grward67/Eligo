@@ -10,6 +10,9 @@ export interface FakeElection {
   scheduledStartAt?: Date | null;
   scheduledEndAt?: Date | null;
   scheduleTimezone?: string | null;
+  prThreshold?: number;
+  prCalculationMethod?: string;
+  prAllowBlankVote?: boolean;
 }
 
 export interface FakeCandidate {
@@ -18,6 +21,22 @@ export interface FakeCandidate {
   name?: string;
   party?: string | null;
   sortOrder?: number;
+}
+
+export interface FakePartyList {
+  id: string;
+  electionId: string;
+  name: string;
+  abbreviation: string;
+  sortOrder?: number;
+}
+
+export interface FakePartyListCandidate {
+  id: string;
+  listId: string;
+  firstName: string;
+  lastName: string;
+  rank: number;
 }
 
 export interface FakeAccessCode {
@@ -61,10 +80,14 @@ export interface FakeAuditLog {
   createdAt: Date;
 }
 
+type FakePartyListWithCandidates = FakePartyList & { candidates?: FakePartyListCandidate[] };
+
 export interface FakePrismaClient {
   _data: {
     elections: FakeElection[];
     candidates: FakeCandidate[];
+    partyLists: FakePartyList[];
+    partyListCandidates: FakePartyListCandidate[];
     accessCodes: FakeAccessCode[];
     voterSessions: FakeVoterSession[];
     ballots: FakeBallot[];
@@ -73,8 +96,11 @@ export interface FakePrismaClient {
   election: {
     findUnique: (args: {
       where: { id: string };
-      include?: { candidates?: { orderBy?: { sortOrder: "asc" } } };
-    }) => Promise<(FakeElection & { candidates?: FakeCandidate[] }) | null>;
+      include?: {
+        candidates?: { orderBy?: { sortOrder: "asc" } };
+        partyLists?: { orderBy?: { sortOrder: "asc" }; include?: { candidates?: { orderBy?: { rank: "asc" } } } };
+      };
+    }) => Promise<(FakeElection & { candidates?: FakeCandidate[]; partyLists?: FakePartyListWithCandidates[] }) | null>;
     findMany: (args: { where: { id: { in: string[] } } }) => Promise<FakeElection[]>;
     create: (args: { data: Partial<FakeElection> }) => Promise<FakeElection>;
     update: (args: { where: { id: string }; data: Partial<FakeElection> }) => Promise<FakeElection>;
@@ -82,7 +108,24 @@ export interface FakePrismaClient {
   };
   candidate: {
     findMany: (args: { where: { electionId: string } }) => Promise<FakeCandidate[]>;
+    create: (args: { data: Partial<FakeCandidate> }) => Promise<FakeCandidate>;
+    count: (args: { where: { electionId: string } }) => Promise<number>;
     deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
+  };
+  partyList: {
+    findUnique: (args: {
+      where: { id: string };
+      include?: { candidates?: { orderBy?: { rank: "asc" } } };
+    }) => Promise<FakePartyListWithCandidates | null>;
+    findMany: (args: { where: { electionId: string } }) => Promise<FakePartyList[]>;
+    create: (args: { data: Partial<FakePartyList> }) => Promise<FakePartyList>;
+    count: (args: { where: { electionId: string } }) => Promise<number>;
+    deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
+  };
+  partyListCandidate: {
+    findMany: (args: { where: { listId: string } }) => Promise<FakePartyListCandidate[]>;
+    create: (args: { data: Partial<FakePartyListCandidate> }) => Promise<FakePartyListCandidate>;
+    count: (args: { where: { listId: string } }) => Promise<number>;
   };
   accessCode: {
     findFirst: (args: { where: { electionId: string; codeHash: string } }) => Promise<FakeAccessCode | null>;
@@ -128,6 +171,8 @@ export interface FakePrismaClient {
 export function createFakePrisma(): FakePrismaClient {
   const elections: FakeElection[] = [];
   const candidates: FakeCandidate[] = [];
+  const partyLists: FakePartyList[] = [];
+  const partyListCandidates: FakePartyListCandidate[] = [];
   const accessCodes: FakeAccessCode[] = [];
   const voterSessions: FakeVoterSession[] = [];
   const ballots: FakeBallot[] = [];
@@ -136,7 +181,7 @@ export function createFakePrisma(): FakePrismaClient {
   const nextId = () => `id_${++idCounter}`;
 
   const fake: FakePrismaClient = {
-    _data: { elections, candidates, accessCodes, voterSessions, ballots, auditLogs },
+    _data: { elections, candidates, partyLists, partyListCandidates, accessCodes, voterSessions, ballots, auditLogs },
 
     election: {
       findUnique: async ({
@@ -144,18 +189,38 @@ export function createFakePrisma(): FakePrismaClient {
         include,
       }: {
         where: { id: string };
-        include?: { candidates?: { orderBy?: { sortOrder: "asc" } } };
+        include?: {
+          candidates?: { orderBy?: { sortOrder: "asc" } };
+          partyLists?: { orderBy?: { sortOrder: "asc" }; include?: { candidates?: { orderBy?: { rank: "asc" } } } };
+        };
       }) => {
         const row = elections.find((e) => e.id === where.id);
         if (!row) return null;
+        const result: FakeElection & { candidates?: FakeCandidate[]; partyLists?: FakePartyListWithCandidates[] } = { ...row };
         if (include?.candidates) {
-          const rowCandidates = candidates
+          result.candidates = candidates
             .filter((c) => c.electionId === row.id)
             .slice()
             .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-          return { ...row, candidates: rowCandidates };
         }
-        return row;
+        if (include?.partyLists) {
+          result.partyLists = partyLists
+            .filter((l) => l.electionId === row.id)
+            .slice()
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+            .map((l) => ({
+              ...l,
+              ...(include.partyLists?.include?.candidates
+                ? {
+                    candidates: partyListCandidates
+                      .filter((c) => c.listId === l.id)
+                      .slice()
+                      .sort((a, b) => a.rank - b.rank),
+                  }
+                : {}),
+            }));
+        }
+        return result;
       },
       findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
         elections.filter((e) => where.id.in.includes(e.id)),
@@ -187,6 +252,13 @@ export function createFakePrisma(): FakePrismaClient {
     candidate: {
       findMany: async ({ where }: { where: { electionId: string } }) =>
         candidates.filter((c) => c.electionId === where.electionId),
+      create: async ({ data }: { data: Partial<FakeCandidate> }) => {
+        const row = { id: nextId(), sortOrder: 0, party: null, ...data } as FakeCandidate;
+        candidates.push(row);
+        return row;
+      },
+      count: async ({ where }: { where: { electionId: string } }) =>
+        candidates.filter((c) => c.electionId === where.electionId).length,
       deleteMany: async ({ where }: { where: { electionId: string } }) => {
         const before = candidates.length;
         const remaining = candidates.filter((c) => c.electionId !== where.electionId);
@@ -194,6 +266,61 @@ export function createFakePrisma(): FakePrismaClient {
         candidates.push(...remaining);
         return { count: before - candidates.length };
       },
+    },
+
+    partyList: {
+      findUnique: async ({
+        where,
+        include,
+      }: {
+        where: { id: string };
+        include?: { candidates?: { orderBy?: { rank: "asc" } } };
+      }) => {
+        const row = partyLists.find((l) => l.id === where.id);
+        if (!row) return null;
+        if (include?.candidates) {
+          return {
+            ...row,
+            candidates: partyListCandidates
+              .filter((c) => c.listId === row.id)
+              .slice()
+              .sort((a, b) => a.rank - b.rank),
+          };
+        }
+        return row;
+      },
+      findMany: async ({ where }: { where: { electionId: string } }) =>
+        partyLists.filter((l) => l.electionId === where.electionId),
+      create: async ({ data }: { data: Partial<FakePartyList> }) => {
+        const row = { id: nextId(), sortOrder: 0, ...data } as FakePartyList;
+        partyLists.push(row);
+        return row;
+      },
+      count: async ({ where }: { where: { electionId: string } }) =>
+        partyLists.filter((l) => l.electionId === where.electionId).length,
+      deleteMany: async ({ where }: { where: { electionId: string } }) => {
+        const before = partyLists.length;
+        const remaining = partyLists.filter((l) => l.electionId !== where.electionId);
+        const removedIds = new Set(partyLists.filter((l) => l.electionId === where.electionId).map((l) => l.id));
+        partyLists.length = 0;
+        partyLists.push(...remaining);
+        const remainingCandidates = partyListCandidates.filter((c) => !removedIds.has(c.listId));
+        partyListCandidates.length = 0;
+        partyListCandidates.push(...remainingCandidates);
+        return { count: before - partyLists.length };
+      },
+    },
+
+    partyListCandidate: {
+      findMany: async ({ where }: { where: { listId: string } }) =>
+        partyListCandidates.filter((c) => c.listId === where.listId),
+      create: async ({ data }: { data: Partial<FakePartyListCandidate> }) => {
+        const row = { id: nextId(), ...data } as FakePartyListCandidate;
+        partyListCandidates.push(row);
+        return row;
+      },
+      count: async ({ where }: { where: { listId: string } }) =>
+        partyListCandidates.filter((c) => c.listId === where.listId).length,
     },
 
     accessCode: {

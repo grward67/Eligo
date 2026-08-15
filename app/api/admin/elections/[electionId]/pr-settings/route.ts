@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/require-admin";
-import { updateVotingSystem } from "@/lib/services/election-service";
+import { updatePrSettings } from "@/lib/services/election-service";
 
 const bodySchema = z.object({
-  votingSystem: z.enum(["STV", "FPTP", "PR"]),
+  prThreshold: z.number().min(0).max(100),
+  prCalculationMethod: z.enum(["DHONDT", "SAINTE_LAGUE"]),
+  prAllowBlankVote: z.boolean(),
 });
 
 const ERROR_MESSAGES: Record<string, string> = {
   NOT_FOUND: "Election not found.",
-  NOT_DRAFT: "The ballot type can only be changed while the election is still in Draft.",
-  HAS_BALLOTS: "The ballot type can't be changed once ballots have been submitted.",
+  NOT_DRAFT: "These settings can only be changed while the election is still in Draft.",
+  INVALID_THRESHOLD: "Threshold must be between 0 and 100.",
 };
 
 export async function POST(request: NextRequest, { params }: { params: { electionId: string } }) {
@@ -24,11 +26,11 @@ export async function POST(request: NextRequest, { params }: { params: { electio
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const result = await updateVotingSystem(params.electionId, parsed.data.votingSystem, admin.sub);
+  const result = await updatePrSettings(params.electionId, parsed.data, admin.sub);
 
   if (!result.ok) {
-    const status = result.error === "NOT_FOUND" ? 404 : 409;
-    return NextResponse.json({ error: ERROR_MESSAGES[result.error ?? ""] ?? "Could not update ballot type." }, { status });
+    const status = result.error === "NOT_FOUND" ? 404 : result.error === "NOT_DRAFT" ? 409 : 400;
+    return NextResponse.json({ error: ERROR_MESSAGES[result.error ?? ""] ?? "Could not update settings." }, { status });
   }
 
   return NextResponse.json({ ok: true });

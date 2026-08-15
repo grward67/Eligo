@@ -8,7 +8,7 @@ import { deleteElections } from "@/lib/services/election-service";
 const bodySchema = z.object({
   title: z.string().min(1),
   seats: z.number().int().min(1),
-  votingSystem: z.enum(["STV", "FPTP"]).default("STV"),
+  votingSystem: z.enum(["STV", "FPTP", "PR"]).default("STV"),
 });
 
 export async function POST(request: NextRequest) {

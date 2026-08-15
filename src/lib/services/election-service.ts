@@ -30,6 +30,7 @@ export async function deleteElections(electionIds: string[], deletedById: string
         await tx.voterSession.deleteMany({ where: { electionId: e.id } });
         await tx.accessCode.deleteMany({ where: { electionId: e.id } });
         await tx.candidate.deleteMany({ where: { electionId: e.id } });
+        await tx.partyList.deleteMany({ where: { electionId: e.id } });
         await tx.election.delete({ where: { id: e.id } });
       }
     });
@@ -65,7 +66,7 @@ export interface UpdateVotingSystemResult {
  */
 export async function updateVotingSystem(
   electionId: string,
-  votingSystem: "STV" | "FPTP",
+  votingSystem: "STV" | "FPTP" | "PR",
   updatedById: string
 ): Promise<UpdateVotingSystemResult> {
   const election = await prisma.election.findUnique({ where: { id: electionId } });
@@ -91,6 +92,81 @@ export async function updateVotingSystem(
     targetId: electionId,
     metadata: { votingSystem },
   });
+
+  return { ok: true };
+}
+
+export interface UpdatePrSettingsInput {
+  prThreshold: number;
+  prCalculationMethod: "DHONDT" | "SAINTE_LAGUE";
+  prAllowBlankVote: boolean;
+}
+
+export interface UpdatePrSettingsResult {
+  ok: boolean;
+  error?: "NOT_FOUND" | "NOT_DRAFT" | "INVALID_THRESHOLD";
+}
+
+/**
+ * The Electoral Threshold, Calculation Method, and "allow blank vote"
+ * setting can only be changed while an election is still DRAFT -- all
+ * three feed directly into how ballots are validated and counted, so
+ * changing any of them mid-election would make already-cast votes and
+ * results inconsistent with whatever runs next.
+ */
+export async function updatePrSettings(electionId: string, input: UpdatePrSettingsInput, updatedById: string): Promise<UpdatePrSettingsResult> {
+  const election = await prisma.election.findUnique({ where: { id: electionId } });
+  if (!election) return { ok: false, error: "NOT_FOUND" };
+  if (election.status !== "DRAFT") return { ok: false, error: "NOT_DRAFT" };
+  if (input.prThreshold < 0 || input.prThreshold > 100) return { ok: false, error: "INVALID_THRESHOLD" };
+
+  await prisma.election.update({
+    where: { id: electionId },
+    data: {
+      prThreshold: input.prThreshold,
+      prCalculationMethod: input.prCalculationMethod,
+      prAllowBlankVote: input.prAllowBlankVote,
+    },
+  });
+
+  await writeAuditLog({
+    actorType: "admin",
+    actorId: updatedById,
+    action: "election.pr_settings_change",
+    targetType: "Election",
+    targetId: electionId,
+    metadata: { ...input },
+  });
+
+  return { ok: true };
+}
+
+export type PrOpenReadiness = { ok: true } | { ok: false; error: string };
+
+/**
+ * Gate for the DRAFT -> OPEN transition on a PR election: at least 2 lists,
+ * and every list must already have at least as many candidates as there are
+ * seats, so every seat a list could possibly win has someone to fill it.
+ * A no-op (always ok) for non-PR elections.
+ */
+export async function checkPrReadyToOpen(electionId: string): Promise<PrOpenReadiness> {
+  const election = await prisma.election.findUnique({ where: { id: electionId } });
+  if (!election || election.votingSystem !== "PR") return { ok: true };
+
+  const lists = await prisma.partyList.findMany({ where: { electionId } });
+  if (lists.length < 2) {
+    return { ok: false, error: "At least 2 lists are needed before this election can be opened." };
+  }
+
+  for (const list of lists) {
+    const candidateCount = await prisma.partyListCandidate.count({ where: { listId: list.id } });
+    if (candidateCount < election.seats) {
+      return {
+        ok: false,
+        error: `List "${list.name}" has ${candidateCount} candidate(s), fewer than the ${election.seats} total seat(s). Add more before opening.`,
+      };
+    }
+  }
 
   return { ok: true };
 }

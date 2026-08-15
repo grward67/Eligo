@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/require-admin";
 import { prisma } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit/log";
+import { checkPrReadyToOpen } from "@/lib/services/election-service";
 
 const bodySchema = z.object({
   status: z.enum(["DRAFT", "OPEN", "CLOSED"]),
@@ -17,6 +18,13 @@ export async function POST(request: NextRequest, { params }: { params: { electio
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (parsed.data.status === "OPEN") {
+    const readiness = await checkPrReadyToOpen(params.electionId);
+    if (!readiness.ok) {
+      return NextResponse.json({ error: readiness.error }, { status: 409 });
+    }
   }
 
   const election = await prisma.election.update({

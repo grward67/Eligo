@@ -4,7 +4,7 @@ import { createFakePrisma } from "../../../tests/fakes/fake-prisma";
 const fakePrisma = createFakePrisma();
 vi.mock("@/lib/db", () => ({ prisma: fakePrisma }));
 
-const { deleteElections, updateVotingSystem } = await import("./election-service");
+const { deleteElections, updateVotingSystem, updatePrSettings, checkPrReadyToOpen } = await import("./election-service");
 
 describe("deleteElections", () => {
   beforeEach(() => {
@@ -154,5 +154,101 @@ describe("updateVotingSystem", () => {
     const result = await updateVotingSystem("does-not-exist", "FPTP", "admin1");
     expect(result.ok).toBe(false);
     expect(result.error).toBe("NOT_FOUND");
+  });
+});
+
+describe("updatePrSettings", () => {
+  beforeEach(() => {
+    fakePrisma._data.elections.length = 0;
+    fakePrisma._data.auditLogs.length = 0;
+  });
+
+  it("updates threshold, method, and blank-vote setting while DRAFT", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "DRAFT", votingSystem: "PR" });
+
+    const result = await updatePrSettings("e1", { prThreshold: 5, prCalculationMethod: "SAINTE_LAGUE", prAllowBlankVote: true }, "admin1");
+
+    expect(result.ok).toBe(true);
+    expect(fakePrisma._data.elections[0]).toMatchObject({
+      prThreshold: 5,
+      prCalculationMethod: "SAINTE_LAGUE",
+      prAllowBlankVote: true,
+    });
+    expect(fakePrisma._data.auditLogs).toHaveLength(1);
+  });
+
+  it("refuses to change settings once the election is OPEN", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "OPEN", votingSystem: "PR", prThreshold: 0 });
+    const result = await updatePrSettings("e1", { prThreshold: 5, prCalculationMethod: "DHONDT", prAllowBlankVote: false }, "admin1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("NOT_DRAFT");
+    expect(fakePrisma._data.elections[0].prThreshold).toBe(0);
+  });
+
+  it("rejects a threshold outside 0-100", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "DRAFT", votingSystem: "PR" });
+    const result = await updatePrSettings("e1", { prThreshold: 150, prCalculationMethod: "DHONDT", prAllowBlankVote: false }, "admin1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("INVALID_THRESHOLD");
+  });
+
+  it("reports NOT_FOUND for an unknown election", async () => {
+    const result = await updatePrSettings("does-not-exist", { prThreshold: 0, prCalculationMethod: "DHONDT", prAllowBlankVote: false }, "admin1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("NOT_FOUND");
+  });
+});
+
+describe("checkPrReadyToOpen", () => {
+  beforeEach(() => {
+    fakePrisma._data.elections.length = 0;
+    fakePrisma._data.partyLists.length = 0;
+    fakePrisma._data.partyListCandidates.length = 0;
+  });
+
+  it("is a no-op (always ok) for a non-PR election", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "DRAFT", votingSystem: "STV" });
+    const result = await checkPrReadyToOpen("e1");
+    expect(result.ok).toBe(true);
+  });
+
+  it("blocks opening with fewer than 2 lists", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "DRAFT", votingSystem: "PR", seats: 2 });
+    fakePrisma._data.partyLists.push({ id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A" });
+    const result = await checkPrReadyToOpen("e1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/at least 2 lists/i);
+  });
+
+  it("blocks opening when a list has fewer candidates than total seats", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "DRAFT", votingSystem: "PR", seats: 2 });
+    fakePrisma._data.partyLists.push(
+      { id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A" },
+      { id: "l2", electionId: "e1", name: "Beta", abbreviation: "B" }
+    );
+    fakePrisma._data.partyListCandidates.push(
+      { id: "c1", listId: "l1", firstName: "A", lastName: "One", rank: 1 },
+      { id: "c2", listId: "l1", firstName: "A", lastName: "Two", rank: 2 },
+      { id: "c3", listId: "l2", firstName: "B", lastName: "One", rank: 1 }
+    );
+    const result = await checkPrReadyToOpen("e1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/"Beta"/);
+  });
+
+  it("allows opening when every list meets the seat minimum", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "DRAFT", votingSystem: "PR", seats: 2 });
+    fakePrisma._data.partyLists.push(
+      { id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A" },
+      { id: "l2", electionId: "e1", name: "Beta", abbreviation: "B" }
+    );
+    fakePrisma._data.partyListCandidates.push(
+      { id: "c1", listId: "l1", firstName: "A", lastName: "One", rank: 1 },
+      { id: "c2", listId: "l1", firstName: "A", lastName: "Two", rank: 2 },
+      { id: "c3", listId: "l2", firstName: "B", lastName: "One", rank: 1 },
+      { id: "c4", listId: "l2", firstName: "B", lastName: "Two", rank: 2 }
+    );
+    const result = await checkPrReadyToOpen("e1");
+    expect(result.ok).toBe(true);
   });
 });

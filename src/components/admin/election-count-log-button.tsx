@@ -32,6 +32,31 @@ interface FptpCountLogTally {
   status: string;
 }
 
+interface PrCountLogCandidate {
+  firstName: string;
+  lastName: string;
+  rank: number;
+  status: string;
+}
+
+interface PrCountLogList {
+  name: string;
+  abbreviation: string;
+  votes: number;
+  votePercent: number;
+  seatsWon: number;
+  idealSeats: number;
+  excludedByThreshold: boolean;
+  candidates: PrCountLogCandidate[];
+}
+
+interface PrCountLogTieBreak {
+  seatNumber: number;
+  tiedListNames: string[];
+  winnerName: string;
+  method: string;
+}
+
 interface ElectionCountLog {
   electionTitle: string;
   votingSystem: string;
@@ -42,12 +67,17 @@ interface ElectionCountLog {
   seats: number;
   rounds?: CountLogRound[];
   tallies?: FptpCountLogTally[];
+  lists?: PrCountLogList[];
+  blankVotes?: number;
+  threshold?: number;
+  tieBreaks?: PrCountLogTieBreak[];
   winners: { name: string; party: string | null }[];
 }
 
 const VOTING_SYSTEM_LABELS: Record<string, string> = {
   STV: "Single Transferable Vote (STV)",
   FPTP: "First Past the Post (FPTP)",
+  PR: "Proportional Representation",
 };
 
 function formatDate(iso: string | null): string {
@@ -125,7 +155,59 @@ export function ElectionCountLogButton({ electionId }: { electionId: string }) {
         }
       }
 
-      if (log.votingSystem === "FPTP" && log.tallies) {
+      if (log.votingSystem === "PR" && log.lists) {
+        doc.setFontSize(9);
+        doc.text(
+          `${log.totalValidVotes} valid vote(s)${log.blankVotes ? `, ${log.blankVotes} blank vote(s)` : ""}. Threshold: ${log.threshold}%.`,
+          marginLeft,
+          y
+        );
+        y += 8;
+
+        autoTable(doc, {
+          startY: y,
+          head: [["List", "Votes", "%", "Seats won (raw)", "Status"]],
+          body: log.lists.map((l) => [
+            `${l.name} (${l.abbreviation})`,
+            String(l.votes),
+            `${fmtNum(l.votePercent)}%`,
+            `${l.seatsWon} (${l.idealSeats.toFixed(1)})`,
+            l.excludedByThreshold ? "Excluded (below threshold)" : "Eligible",
+          ]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [8, 77, 73] },
+          margin: { left: marginLeft, right: marginLeft },
+        });
+        y = getLastAutoTableFinalY(doc, y) + 6;
+
+        for (const list of log.lists) {
+          ensureSpace(20);
+          doc.setFontSize(13);
+          doc.text(`${list.name} (${list.abbreviation})`, marginLeft, y);
+          y += 6;
+
+          autoTable(doc, {
+            startY: y,
+            head: [["Rank", "Candidate", "Status"]],
+            body: list.candidates.map((c) => [String(c.rank), `${c.firstName} ${c.lastName}`, c.status]),
+            styles: { fontSize: 9 },
+            headStyles: { fillColor: [8, 77, 73] },
+            margin: { left: marginLeft, right: marginLeft },
+          });
+          y = getLastAutoTableFinalY(doc, y) + 8;
+        }
+
+        if (log.tieBreaks && log.tieBreaks.length > 0) {
+          ensureSpace(12);
+          doc.setFontSize(9);
+          for (const t of log.tieBreaks) {
+            const line = `Seat ${t.seatNumber}: tie between ${t.tiedListNames.join(", ")}, resolved in favor of ${t.winnerName} (${t.method === "votes" ? "more total votes" : "random draw"}).`;
+            const lines = doc.splitTextToSize(line, contentWidth);
+            doc.text(lines, marginLeft, y);
+            y += lines.length * 5 + 2;
+          }
+        }
+      } else if (log.votingSystem === "FPTP" && log.tallies) {
         autoTable(doc, {
           startY: y,
           head: [["Candidate", "Party", "Votes", "Status"]],

@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/require-admin";
-import { updateVotingSystem } from "@/lib/services/election-service";
+import { createPartyList } from "@/lib/services/party-list-service";
 
 const bodySchema = z.object({
-  votingSystem: z.enum(["STV", "FPTP", "PR"]),
+  name: z.string().min(1),
+  abbreviation: z.string().min(1),
 });
 
 const ERROR_MESSAGES: Record<string, string> = {
   NOT_FOUND: "Election not found.",
-  NOT_DRAFT: "The ballot type can only be changed while the election is still in Draft.",
-  HAS_BALLOTS: "The ballot type can't be changed once ballots have been submitted.",
+  NOT_DRAFT: "Lists can only be added while the election is still in Draft.",
 };
 
 export async function POST(request: NextRequest, { params }: { params: { electionId: string } }) {
@@ -24,12 +24,12 @@ export async function POST(request: NextRequest, { params }: { params: { electio
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const result = await updateVotingSystem(params.electionId, parsed.data.votingSystem, admin.sub);
+  const result = await createPartyList(params.electionId, parsed.data.name, parsed.data.abbreviation, admin.sub);
 
   if (!result.ok) {
     const status = result.error === "NOT_FOUND" ? 404 : 409;
-    return NextResponse.json({ error: ERROR_MESSAGES[result.error ?? ""] ?? "Could not update ballot type." }, { status });
+    return NextResponse.json({ error: ERROR_MESSAGES[result.error ?? ""] ?? "Could not create the list." }, { status });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, list: result.list, warning: result.warning ?? null });
 }

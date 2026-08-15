@@ -27,6 +27,7 @@ interface VotingLog {
 const VOTING_SYSTEM_LABELS: Record<string, string> = {
   STV: "Single Transferable Vote (STV)",
   FPTP: "First Past the Post (FPTP)",
+  PR: "Proportional Representation",
 };
 
 function formatDate(iso: string | null): string {
@@ -83,13 +84,13 @@ export function VotingLogButton({ electionId }: { electionId: string }) {
       doc.text(`Ballot type: ${VOTING_SYSTEM_LABELS[log.votingSystem] ?? log.votingSystem}`, 14, y);
       y += 8;
 
-      const isFptp = log.votingSystem === "FPTP";
+      const singleChoice = log.votingSystem === "FPTP" || log.votingSystem === "PR";
       const head = [["Ballot #", ...log.candidates.map((c) => c.name)]];
       const body = log.ballots.map((b) => {
         const row = [String(b.ballotNumber)];
         for (const c of log.candidates) {
           const preference = b.ranking.indexOf(c.id);
-          if (isFptp) {
+          if (singleChoice) {
             row.push(preference === -1 ? "" : "✓");
           } else {
             row.push(preference === -1 ? "" : String(preference + 1));

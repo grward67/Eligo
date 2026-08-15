@@ -10,6 +10,8 @@ describe("buildElectionCountLog", () => {
   beforeEach(() => {
     fakePrisma._data.elections.length = 0;
     fakePrisma._data.candidates.length = 0;
+    fakePrisma._data.partyLists.length = 0;
+    fakePrisma._data.partyListCandidates.length = 0;
     fakePrisma._data.ballots.length = 0;
     fakePrisma._data.auditLogs.length = 0;
   });
@@ -154,6 +156,86 @@ describe("buildElectionCountLog", () => {
     if (!result.ok) {
       expect(result.error).toBe("INVALID");
       expect(result.message).toMatch(/at least 2 candidates/i);
+    }
+  });
+
+  it("builds a per-list vote/seat breakdown plus per-list elected candidates for PR elections", async () => {
+    fakePrisma._data.elections.push({
+      id: "e1",
+      title: "PR Election",
+      status: "CLOSED",
+      votingSystem: "PR",
+      seats: 3,
+      prThreshold: 0,
+      prCalculationMethod: "DHONDT",
+      prAllowBlankVote: true,
+    });
+    fakePrisma._data.partyLists.push(
+      { id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A", sortOrder: 0 },
+      { id: "l2", electionId: "e1", name: "Beta", abbreviation: "B", sortOrder: 1 }
+    );
+    fakePrisma._data.partyListCandidates.push(
+      { id: "c1", listId: "l1", firstName: "Ann", lastName: "One", rank: 1 },
+      { id: "c2", listId: "l1", firstName: "Ann", lastName: "Two", rank: 2 },
+      { id: "c3", listId: "l1", firstName: "Ann", lastName: "Three", rank: 3 },
+      { id: "c4", listId: "l2", firstName: "Bea", lastName: "One", rank: 1 },
+      { id: "c5", listId: "l2", firstName: "Bea", lastName: "Two", rank: 2 },
+      { id: "c6", listId: "l2", firstName: "Bea", lastName: "Three", rank: 3 }
+    );
+    const rankings = [["l1"], ["l1"], ["l1"], ["l1"], ["l1"], ["l1"], ["l1"], ["l1"], ["l1"], ["l1"], ["l2"], ["l2"], ["l2"], ["l2"], ["l2"], ["l2"], ["BLANK"]];
+    rankings.forEach((ranking, i) => {
+      fakePrisma._data.ballots.push({
+        id: `b${i}`,
+        electionId: "e1",
+        voterSessionId: `vs${i}`,
+        ranking: JSON.stringify(ranking),
+        submittedAt: new Date(),
+      });
+    });
+
+    const result = await buildElectionCountLog("e1");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.log.votingSystem).toBe("PR");
+    expect(result.log.totalValidVotes).toBe(16);
+    expect(result.log.blankVotes).toBe(1);
+    expect(result.log.quota).toBeUndefined();
+    expect(result.log.rounds).toBeUndefined();
+    expect(result.log.tallies).toBeUndefined();
+
+    const lists = result.log.lists;
+    if (!lists) throw new Error("expected PR log to include lists");
+    const alpha = lists.find((l) => l.abbreviation === "A")!;
+    expect(alpha.votes).toBe(10);
+    expect(alpha.seatsWon).toBe(2);
+    expect(alpha.candidates.map((c) => c.status)).toEqual(["elected", "elected", "not-elected"]);
+
+    const beta = lists.find((l) => l.abbreviation === "B")!;
+    expect(beta.votes).toBe(6);
+    expect(beta.seatsWon).toBe(1);
+
+    expect(result.log.winners.map((w) => w.name)).toEqual(["Ann One", "Ann Two", "Bea One"]);
+  });
+
+  it("propagates a PR validation error as INVALID rather than throwing", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Broken PR Election", status: "OPEN", votingSystem: "PR", seats: 1 });
+    fakePrisma._data.partyLists.push({ id: "l1", electionId: "e1", name: "Only List", abbreviation: "O", sortOrder: 0 });
+    fakePrisma._data.partyListCandidates.push({ id: "c1", listId: "l1", firstName: "Ann", lastName: "One", rank: 1 });
+    fakePrisma._data.ballots.push({
+      id: "b1",
+      electionId: "e1",
+      voterSessionId: "vs1",
+      ranking: JSON.stringify(["l1"]),
+      submittedAt: new Date(),
+    });
+
+    const result = await buildElectionCountLog("e1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe("INVALID");
+      expect(result.message).toMatch(/at least 2 lists/i);
     }
   });
 });

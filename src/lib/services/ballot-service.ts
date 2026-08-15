@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit/log";
 import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
+import { PR_BLANK_VOTE_VALUE } from "@/lib/pr/count";
 
 export interface SubmitBallotSuccess {
   ok: true;
@@ -46,17 +47,26 @@ export async function submitBallot(
     return { ok: false, error: "ELECTION_NOT_OPEN" };
   }
 
-  const candidates = await prisma.candidate.findMany({ where: { electionId } });
-  const candidateIds = new Set(candidates.map((c) => c.id));
-  const uniqueRanking = new Set(ranking);
+  let rankingValid: boolean;
+  if (election.votingSystem === "PR") {
+    // PR voters pick exactly one list (or the blank sentinel, if the election allows it) -- never a candidate.
+    const lists = await prisma.partyList.findMany({ where: { electionId } });
+    const listIds = new Set(lists.map((l) => l.id));
+    rankingValid =
+      ranking.length === 1 && (listIds.has(ranking[0]) || (election.prAllowBlankVote && ranking[0] === PR_BLANK_VOTE_VALUE));
+  } else {
+    const candidates = await prisma.candidate.findMany({ where: { electionId } });
+    const candidateIds = new Set(candidates.map((c) => c.id));
+    const uniqueRanking = new Set(ranking);
 
-  // FPTP is a single choice, not a ranking: exactly one valid candidate, no
-  // more and no less. STV keeps its original "at least one, no duplicates"
-  // rule (a voter doesn't have to rank every candidate).
-  const rankingValid =
-    election.votingSystem === "FPTP"
-      ? ranking.length === 1 && candidateIds.has(ranking[0])
-      : ranking.length > 0 && ranking.length === uniqueRanking.size && ranking.every((id) => candidateIds.has(id));
+    // FPTP is a single choice, not a ranking: exactly one valid candidate, no
+    // more and no less. STV keeps its original "at least one, no duplicates"
+    // rule (a voter doesn't have to rank every candidate).
+    rankingValid =
+      election.votingSystem === "FPTP"
+        ? ranking.length === 1 && candidateIds.has(ranking[0])
+        : ranking.length > 0 && ranking.length === uniqueRanking.size && ranking.every((id) => candidateIds.has(id));
+  }
 
   if (!rankingValid) {
     return { ok: false, error: "INVALID_RANKING" };

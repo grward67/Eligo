@@ -56,6 +56,7 @@ export function CreateElectionForm() {
         <select value={votingSystem} onChange={(e) => setVotingSystem(e.target.value)}>
           <option value="STV">Single Transferable Vote (STV)</option>
           <option value="FPTP">First Past the Post (FPTP)</option>
+          <option value="PR">Proportional Representation (closed list)</option>
         </select>
       </label>
       {error && <p className="form-error">{error}</p>}

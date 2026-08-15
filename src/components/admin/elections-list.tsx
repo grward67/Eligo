@@ -16,6 +16,7 @@ interface ElectionSummary {
 const VOTING_SYSTEM_LABELS: Record<string, string> = {
   STV: "Single Transferable Vote (STV)",
   FPTP: "First Past the Post (FPTP)",
+  PR: "Proportional Representation",
 };
 
 export function ElectionsList({ elections }: { elections: ElectionSummary[] }) {
@@ -119,6 +120,7 @@ export function ElectionsList({ elections }: { elections: ElectionSummary[] }) {
                 >
                   <option value="STV">Single Transferable Vote (STV)</option>
                   <option value="FPTP">First Past the Post (FPTP)</option>
+                  <option value="PR">Proportional Representation</option>
                 </select>
               ) : (
                 <span className="voting-system-label">{VOTING_SYSTEM_LABELS[e.votingSystem] ?? e.votingSystem}</span>

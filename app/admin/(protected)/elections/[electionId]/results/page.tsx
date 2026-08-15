@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { runSTV, StvValidationError } from "@/lib/stv/count";
 import { runFPTP, FptpValidationError } from "@/lib/fptp/count";
+import { runPR, PrValidationError } from "@/lib/pr/count";
 import { VotingLogButton } from "@/components/admin/voting-log-button";
 import { ElectionCountLogButton } from "@/components/admin/election-count-log-button";
 import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
@@ -14,7 +15,7 @@ export default async function ResultsPage({ params }: { params: { electionId: st
 
   const election = await prisma.election.findUnique({
     where: { id: params.electionId },
-    include: { candidates: true },
+    include: { candidates: true, partyLists: { orderBy: { sortOrder: "asc" }, include: { candidates: true } } },
   });
 
   if (!election) {
@@ -91,6 +92,109 @@ export default async function ResultsPage({ params }: { params: { electionId: st
             ))}
           </tbody>
         </table>
+      </div>
+    );
+  }
+
+  if (election.votingSystem === "PR") {
+    let result;
+    try {
+      result = runPR(
+        election.partyLists.map((l) => ({
+          id: l.id,
+          name: l.name,
+          abbreviation: l.abbreviation,
+          candidates: l.candidates.map((c) => ({ id: c.id, firstName: c.firstName, lastName: c.lastName, rank: c.rank })),
+        })),
+        election.seats,
+        election.prThreshold,
+        election.prCalculationMethod as "DHONDT" | "SAINTE_LAGUE",
+        election.prAllowBlankVote,
+        ballots.map((b) => ({ ranking: JSON.parse(b.ranking) as string[] }))
+      );
+    } catch (err) {
+      const message = err instanceof PrValidationError ? err.message : "Could not compute results.";
+      return (
+        <div>
+          {header}
+          <p>{message}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        {header}
+        <p>
+          {result.totalValidVotes} valid vote(s){result.blankVotes > 0 ? `, ${result.blankVotes} blank vote(s)` : ""}. Threshold:{" "}
+          {result.threshold}%.
+        </p>
+
+        <h2>Winners</h2>
+        {result.lists.map((l) => (
+          <div key={l.id}>
+            <h3>
+              {l.name} ({l.abbreviation}) &mdash; {l.seatsWon} seat(s)
+            </h3>
+            {l.seatsWon > 0 && (
+              <ol>
+                {l.candidates
+                  .filter((c) => c.status === "elected")
+                  .map((c) => (
+                    <li key={c.id}>
+                      {c.firstName} {c.lastName}
+                    </li>
+                  ))}
+              </ol>
+            )}
+          </div>
+        ))}
+
+        <h2>Final count</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>List</th>
+              <th>Votes</th>
+              <th>%</th>
+              <th>Seats won (raw)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.lists.map((l) => (
+              <tr key={l.id}>
+                <td>
+                  {l.name} ({l.abbreviation})
+                </td>
+                <td>{l.votes}</td>
+                <td>{fmtNum(l.votePercent)}%</td>
+                <td>
+                  {l.seatsWon} ({l.idealSeats.toFixed(1)})
+                </td>
+                <td>{l.excludedByThreshold ? "Excluded (below threshold)" : "Eligible"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {result.tieBreaks.length > 0 && (
+          <>
+            <h2>Tie-breaks</h2>
+            <ul>
+              {result.tieBreaks.map((t, i) => {
+                const names = t.tiedListIds.map((id) => result!.lists.find((l) => l.id === id)?.abbreviation ?? id).join(", ");
+                const winnerName = result!.lists.find((l) => l.id === t.winnerId)?.abbreviation ?? t.winnerId;
+                return (
+                  <li key={i}>
+                    Seat {t.seatNumber}: tie between {names}, resolved in favor of {winnerName} (
+                    {t.method === "votes" ? "more total votes" : "random draw"}).
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
       </div>
     );
   }

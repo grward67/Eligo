@@ -5,6 +5,7 @@ import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-se
 import { prisma } from "@/lib/db";
 import { BallotForm } from "@/components/voter/ballot-form";
 import { FptpBallotForm } from "@/components/voter/fptp-ballot-form";
+import { PrBallotForm } from "@/components/voter/pr-ballot-form";
 import "../../vote.css";
 
 export default async function BallotPage({ params }: { params: { electionId: string } }) {
@@ -53,10 +54,17 @@ export default async function BallotPage({ params }: { params: { electionId: str
     );
   }
 
-  const candidates = await prisma.candidate.findMany({
-    where: { electionId },
-    orderBy: { sortOrder: "asc" },
-  });
+  const candidates =
+    election.votingSystem === "PR"
+      ? []
+      : await prisma.candidate.findMany({
+          where: { electionId },
+          orderBy: { sortOrder: "asc" },
+        });
+  const partyLists =
+    election.votingSystem === "PR"
+      ? await prisma.partyList.findMany({ where: { electionId }, orderBy: { sortOrder: "asc" } })
+      : [];
 
   return (
     <main className="vote-shell">
@@ -72,6 +80,15 @@ export default async function BallotPage({ params }: { params: { electionId: str
             <FptpBallotForm
               electionId={electionId}
               candidates={candidates.map((c) => ({ id: c.id, name: c.name, party: c.party }))}
+            />
+          </>
+        ) : election.votingSystem === "PR" ? (
+          <>
+            <p>Tap to choose one list to vote for.</p>
+            <PrBallotForm
+              electionId={electionId}
+              lists={partyLists.map((l) => ({ id: l.id, name: l.name, abbreviation: l.abbreviation }))}
+              allowBlankVote={election.prAllowBlankVote}
             />
           </>
         ) : (

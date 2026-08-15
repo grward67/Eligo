@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getElectionActualDates } from "@/lib/services/election-dates-service";
+import { PR_BLANK_VOTE_VALUE } from "@/lib/pr/count";
 
 export interface VotingLogCandidate {
   id: string;
@@ -20,6 +21,7 @@ export interface VotingLog {
   votingSystem: string;
   startedAt: string | null;
   endedAt: string | null;
+  /** For PR, one "candidate" column per list (id/name/party repurposed as listId/name/abbreviation), plus a synthetic "Blank vote" column if the election allows it. */
   candidates: VotingLogCandidate[];
   ballots: VotingLogBallot[];
 }
@@ -28,7 +30,10 @@ export interface VotingLog {
 export async function buildVotingLog(electionId: string): Promise<VotingLog | null> {
   const election = await prisma.election.findUnique({
     where: { id: electionId },
-    include: { candidates: { orderBy: { sortOrder: "asc" } } },
+    include: {
+      candidates: { orderBy: { sortOrder: "asc" } },
+      partyLists: { orderBy: { sortOrder: "asc" } },
+    },
   });
 
   if (!election) return null;
@@ -40,12 +45,20 @@ export async function buildVotingLog(electionId: string): Promise<VotingLog | nu
     orderBy: { submittedAt: "asc" },
   });
 
+  const candidates: VotingLogCandidate[] =
+    election.votingSystem === "PR"
+      ? [
+          ...election.partyLists.map((l) => ({ id: l.id, name: l.name, party: l.abbreviation })),
+          ...(election.prAllowBlankVote ? [{ id: PR_BLANK_VOTE_VALUE, name: "Blank vote", party: null }] : []),
+        ]
+      : election.candidates.map((c) => ({ id: c.id, name: c.name, party: c.party }));
+
   return {
     electionTitle: election.title,
     votingSystem: election.votingSystem,
     startedAt,
     endedAt,
-    candidates: election.candidates.map((c) => ({ id: c.id, name: c.name, party: c.party })),
+    candidates,
     ballots: ballots.map((b, i) => ({
       ballotNumber: i + 1,
       ranking: JSON.parse(b.ranking) as string[],

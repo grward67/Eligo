@@ -180,6 +180,72 @@ describe("submitBallot (FPTP)", () => {
   });
 });
 
+describe("submitBallot (PR)", () => {
+  beforeEach(() => {
+    fakePrisma._data.elections.length = 0;
+    fakePrisma._data.partyLists.length = 0;
+    fakePrisma._data.voterSessions.length = 0;
+    fakePrisma._data.ballots.length = 0;
+    fakePrisma._data.auditLogs.length = 0;
+  });
+
+  function seedPr(allowBlankVote: boolean) {
+    fakePrisma._data.elections.push({ id: "e1", title: "PR Election", status: "OPEN", votingSystem: "PR", prAllowBlankVote: allowBlankVote });
+    fakePrisma._data.partyLists.push({ id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A" }, { id: "l2", electionId: "e1", name: "Beta", abbreviation: "B" });
+    fakePrisma._data.voterSessions.push({
+      id: "vs1",
+      electionId: "e1",
+      accessCodeId: "ac1",
+      ballotSubmitted: false,
+      revoked: false,
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+  }
+
+  it("accepts a single valid list choice", async () => {
+    seedPr(false);
+    const result = await submitBallot("vs1", "e1", ["l1"]);
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(fakePrisma._data.ballots[0].ranking)).toEqual(["l1"]);
+  });
+
+  it("accepts a blank vote when the election allows it", async () => {
+    seedPr(true);
+    const result = await submitBallot("vs1", "e1", ["BLANK"]);
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(fakePrisma._data.ballots[0].ranking)).toEqual(["BLANK"]);
+  });
+
+  it("rejects a blank vote when the election doesn't allow it", async () => {
+    seedPr(false);
+    const result = await submitBallot("vs1", "e1", ["BLANK"]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("INVALID_RANKING");
+  });
+
+  it("rejects more than one selection", async () => {
+    seedPr(false);
+    const result = await submitBallot("vs1", "e1", ["l1", "l2"]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("INVALID_RANKING");
+  });
+
+  it("rejects zero selections", async () => {
+    seedPr(false);
+    const result = await submitBallot("vs1", "e1", []);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("INVALID_RANKING");
+  });
+
+  it("rejects a selection that isn't a real list", async () => {
+    seedPr(false);
+    const result = await submitBallot("vs1", "e1", ["does-not-exist"]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("INVALID_RANKING");
+  });
+});
+
 describe("deleteBallot", () => {
   beforeEach(() => {
     fakePrisma._data.elections.length = 0;

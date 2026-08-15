@@ -129,6 +129,51 @@
   opacity: 0.6;
 }
 
+.radio-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.radio-fieldset legend {
+  font-size: 0.85rem;
+  color: var(--color-base-content-secondary);
+  padding: 0;
+}
+.radio-label {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--color-base-content);
+}
+
+.party-list-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0;
+}
+.party-list-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-base-border);
+  border-radius: var(--radius-card);
+  padding: 14px 16px;
+}
+.party-list-card h3 {
+  margin: 0 0 8px;
+}
+.party-list-card ol {
+  margin: 0 0 8px;
+  padding-left: 1.4em;
+}
+.list-candidate-form {
+  margin: 10px 0 0;
+}
+
 .election-list,
 .election-list li {
   list-style: none;
