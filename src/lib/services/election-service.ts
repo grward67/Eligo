@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit/log";
+import type { AdminSessionPayload } from "@/lib/auth/admin-session";
 
 export interface DeleteElectionsResult {
   deletedIds: string[];
@@ -13,10 +14,17 @@ export interface DeleteElectionsResult {
  * explicitly in dependency order (Ballot before VoterSession, since Ballot
  * also references VoterSession directly) rather than relying solely on the
  * database's ON DELETE CASCADE.
+ *
+ * Any requested id that isn't owned by `session` (account admins only --
+ * product admins can delete anything) is silently dropped, exactly as if
+ * it didn't exist, rather than reported as blocked.
  */
-export async function deleteElections(electionIds: string[], deletedById: string): Promise<DeleteElectionsResult> {
+export async function deleteElections(electionIds: string[], session: AdminSessionPayload): Promise<DeleteElectionsResult> {
   const elections = await prisma.election.findMany({
-    where: { id: { in: electionIds } },
+    where: {
+      id: { in: electionIds },
+      ...(session.role === "PRODUCT_ADMIN" ? {} : { createdById: session.sub }),
+    },
     select: { id: true, title: true, status: true },
   });
 
@@ -38,7 +46,7 @@ export async function deleteElections(electionIds: string[], deletedById: string
     for (const e of deletable) {
       await writeAuditLog({
         actorType: "admin",
-        actorId: deletedById,
+        actorId: session.sub,
         action: "election.delete",
         targetType: "Election",
         targetId: e.id,

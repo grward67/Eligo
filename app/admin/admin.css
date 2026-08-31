@@ -92,6 +92,16 @@
   color: var(--color-primary-content);
   font-weight: 700;
 }
+.auth-switch-link {
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--color-base-content-secondary);
+}
+.auth-switch-link a {
+  color: var(--color-primary);
+  font-weight: 600;
+}
 
 .inline-form {
   display: flex;
@@ -210,6 +220,17 @@
   font-size: 0.85rem;
 }
 .voting-system-label {
+  font-size: 0.85rem;
+  color: var(--color-base-content-secondary);
+}
+.election-owner-label {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-base-200);
+  color: var(--color-base-content-secondary);
+}
+.quota-hint {
   font-size: 0.85rem;
   color: var(--color-base-content-secondary);
 }

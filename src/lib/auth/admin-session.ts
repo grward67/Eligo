@@ -13,13 +13,16 @@ function secretKey() {
   return new TextEncoder().encode(env.adminSessionSecret);
 }
 
+export type AdminRole = "PRODUCT_ADMIN" | "ACCOUNT_ADMIN";
+
 export interface AdminSessionPayload {
   sub: string;
   email: string;
+  role: AdminRole;
 }
 
 export async function signAdminSession(payload: AdminSessionPayload): Promise<string> {
-  return new SignJWT({ email: payload.email })
+  return new SignJWT({ email: payload.email, role: payload.role })
     .setProtectedHeader({ alg: ALG })
     .setSubject(payload.sub)
     .setIssuedAt()
@@ -31,8 +34,9 @@ export async function verifyAdminSession(token: string): Promise<AdminSessionPay
   try {
     const { payload } = await jwtVerify(token, secretKey());
     const email = payload.email;
-    if (!payload.sub || typeof email !== "string") return null;
-    return { sub: payload.sub, email };
+    const role = payload.role;
+    if (!payload.sub || typeof email !== "string" || (role !== "PRODUCT_ADMIN" && role !== "ACCOUNT_ADMIN")) return null;
+    return { sub: payload.sub, email, role };
   } catch {
     return null;
   }

@@ -1,7 +1,16 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireAdminSession } from "@/lib/auth/require-admin";
 
 export default async function AuditLogPage({ searchParams }: { searchParams: { target?: string; actor?: string } }) {
+  const session = await requireAdminSession();
+  if (!session) redirect("/admin/login");
+  // Global, cross-tenant view -- product admin only. Scoping this correctly
+  // for account admins would mean joining every audit target type back to
+  // an owned election, which isn't built yet.
+  if (session.role !== "PRODUCT_ADMIN") redirect("/admin");
+
   const target = searchParams.target?.trim() || null;
   const actor = searchParams.actor?.trim() || null;
 

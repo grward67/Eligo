@@ -90,6 +90,9 @@ describe("revokeCode", () => {
 describe("lookupCode", () => {
   const CODE = "5UR87-5C8S2";
   const CODE_HASH = hashAccessCode(CODE);
+  const owner = { sub: "admin1", email: "owner@example.com", role: "ACCOUNT_ADMIN" as const };
+  const otherAccountAdmin = { sub: "admin2", email: "other@example.com", role: "ACCOUNT_ADMIN" as const };
+  const productAdmin = { sub: "admin9", email: "product@example.com", role: "PRODUCT_ADMIN" as const };
 
   beforeEach(() => {
     fakePrisma._data.elections.length = 0;
@@ -99,12 +102,12 @@ describe("lookupCode", () => {
   });
 
   it("reports not found for a code that doesn't exist", async () => {
-    const result = await lookupCode("NOPE0-00000");
+    const result = await lookupCode("NOPE0-00000", owner);
     expect(result.found).toBe(false);
   });
 
   it("reports an active, not-yet-voted code correctly", async () => {
-    fakePrisma._data.elections.push({ id: "e1", title: "Test Election", status: "OPEN" });
+    fakePrisma._data.elections.push({ id: "e1", title: "Test Election", status: "OPEN", createdById: "admin1" });
     fakePrisma._data.accessCodes.push({
       id: "ac1",
       electionId: "e1",
@@ -116,7 +119,7 @@ describe("lookupCode", () => {
       expiresAt: null,
     });
 
-    const result = await lookupCode(CODE);
+    const result = await lookupCode(CODE, owner);
 
     expect(result.found).toBe(true);
     expect(result.electionTitle).toBe("Test Election");
@@ -127,7 +130,7 @@ describe("lookupCode", () => {
   });
 
   it("reports a voted code along with when the vote was cast", async () => {
-    fakePrisma._data.elections.push({ id: "e1", title: "Test Election", status: "OPEN" });
+    fakePrisma._data.elections.push({ id: "e1", title: "Test Election", status: "OPEN", createdById: "admin1" });
     fakePrisma._data.accessCodes.push({
       id: "ac1",
       electionId: "e1",
@@ -155,7 +158,7 @@ describe("lookupCode", () => {
       submittedAt: votedAt,
     });
 
-    const result = await lookupCode(CODE);
+    const result = await lookupCode(CODE, owner);
 
     expect(result.found).toBe(true);
     expect(result.active).toBe(false);
@@ -165,7 +168,7 @@ describe("lookupCode", () => {
   });
 
   it("is insensitive to case, spacing, and dashes, matching how voters type it", async () => {
-    fakePrisma._data.elections.push({ id: "e1", title: "Test Election", status: "OPEN" });
+    fakePrisma._data.elections.push({ id: "e1", title: "Test Election", status: "OPEN", createdById: "admin1" });
     fakePrisma._data.accessCodes.push({
       id: "ac1",
       electionId: "e1",
@@ -176,7 +179,39 @@ describe("lookupCode", () => {
       expiresAt: null,
     });
 
-    const result = await lookupCode(" 5ur875c8s2 ");
+    const result = await lookupCode(" 5ur875c8s2 ", owner);
+    expect(result.found).toBe(true);
+  });
+
+  it("reports not found for a code belonging to another account admin's election", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Test Election", status: "OPEN", createdById: "admin1" });
+    fakePrisma._data.accessCodes.push({
+      id: "ac1",
+      electionId: "e1",
+      codeHash: CODE_HASH,
+      maxUses: 1,
+      useCount: 0,
+      active: true,
+      expiresAt: null,
+    });
+
+    const result = await lookupCode(CODE, otherAccountAdmin);
+    expect(result.found).toBe(false);
+  });
+
+  it("lets a product admin look up any account admin's code", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Test Election", status: "OPEN", createdById: "admin1" });
+    fakePrisma._data.accessCodes.push({
+      id: "ac1",
+      electionId: "e1",
+      codeHash: CODE_HASH,
+      maxUses: 1,
+      useCount: 0,
+      active: true,
+      expiresAt: null,
+    });
+
+    const result = await lookupCode(CODE, productAdmin);
     expect(result.found).toBe(true);
   });
 });

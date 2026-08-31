@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { verifyPassword } from "@/lib/auth/password";
+import { registerAdmin, RegisterAdminValidationError } from "@/lib/services/admin-account-service";
 import { signAdminSession, ADMIN_SESSION_COOKIE, ADMIN_SESSION_MAX_AGE_SECONDS } from "@/lib/auth/admin-session";
 import { writeAuditLog } from "@/lib/audit/log";
 
@@ -17,16 +17,22 @@ export async function POST(request: NextRequest) {
   }
 
   const { email, password } = parsed.data;
-  const admin = await prisma.admin.findUnique({ where: { email } });
-  const passwordOk = admin ? await verifyPassword(password, admin.passwordHash) : false;
 
-  if (!admin || !passwordOk) {
-    await writeAuditLog({
-      actorType: "admin",
-      action: "admin.login_failed",
-      metadata: { email },
-    });
-    return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+  let result;
+  try {
+    result = await registerAdmin(email, password);
+  } catch (err) {
+    const message = err instanceof RegisterAdminValidationError ? err.message : "Could not create your account.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  if (!result.ok || !result.admin) {
+    return NextResponse.json({ error: "That email is already registered." }, { status: 409 });
+  }
+
+  const admin = await prisma.admin.findUnique({ where: { id: result.admin.id } });
+  if (!admin) {
+    return NextResponse.json({ error: "Could not create your account." }, { status: 500 });
   }
 
   const token = await signAdminSession({ sub: admin.id, email: admin.email, role: admin.role as "PRODUCT_ADMIN" | "ACCOUNT_ADMIN" });
@@ -44,6 +50,7 @@ export async function POST(request: NextRequest) {
     actorType: "admin",
     actorId: admin.id,
     action: "admin.login",
+    metadata: { via: "register" },
   });
 
   return response;

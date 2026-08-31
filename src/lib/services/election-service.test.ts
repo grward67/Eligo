@@ -6,6 +6,9 @@ vi.mock("@/lib/db", () => ({ prisma: fakePrisma }));
 
 const { deleteElections, updateVotingSystem, updatePrSettings, checkPrReadyToOpen } = await import("./election-service");
 
+const accountAdmin = { sub: "admin1", email: "owner@example.com", role: "ACCOUNT_ADMIN" as const };
+const productAdmin = { sub: "admin9", email: "product@example.com", role: "PRODUCT_ADMIN" as const };
+
 describe("deleteElections", () => {
   beforeEach(() => {
     fakePrisma._data.elections.length = 0;
@@ -17,10 +20,10 @@ describe("deleteElections", () => {
   });
 
   it("deletes a DRAFT election and its dependent rows", async () => {
-    fakePrisma._data.elections.push({ id: "e1", title: "Draft Election", status: "DRAFT" });
+    fakePrisma._data.elections.push({ id: "e1", title: "Draft Election", status: "DRAFT", createdById: "admin1" });
     fakePrisma._data.candidates.push({ id: "c1", electionId: "e1" });
 
-    const result = await deleteElections(["e1"], "admin1");
+    const result = await deleteElections(["e1"], accountAdmin);
 
     expect(result.deletedIds).toEqual(["e1"]);
     expect(result.blocked).toEqual([]);
@@ -30,7 +33,7 @@ describe("deleteElections", () => {
   });
 
   it("deletes a CLOSED election along with its ballots and access codes", async () => {
-    fakePrisma._data.elections.push({ id: "e1", title: "Closed Election", status: "CLOSED" });
+    fakePrisma._data.elections.push({ id: "e1", title: "Closed Election", status: "CLOSED", createdById: "admin1" });
     fakePrisma._data.accessCodes.push({
       id: "ac1",
       electionId: "e1",
@@ -57,7 +60,7 @@ describe("deleteElections", () => {
       submittedAt: new Date(),
     });
 
-    const result = await deleteElections(["e1"], "admin1");
+    const result = await deleteElections(["e1"], accountAdmin);
 
     expect(result.deletedIds).toEqual(["e1"]);
     expect(fakePrisma._data.ballots).toHaveLength(0);
@@ -66,9 +69,9 @@ describe("deleteElections", () => {
   });
 
   it("refuses to delete an OPEN (still running) election and reports it as blocked", async () => {
-    fakePrisma._data.elections.push({ id: "e1", title: "Live Election", status: "OPEN" });
+    fakePrisma._data.elections.push({ id: "e1", title: "Live Election", status: "OPEN", createdById: "admin1" });
 
-    const result = await deleteElections(["e1"], "admin1");
+    const result = await deleteElections(["e1"], accountAdmin);
 
     expect(result.deletedIds).toEqual([]);
     expect(result.blocked).toEqual([{ id: "e1", title: "Live Election" }]);
@@ -78,12 +81,12 @@ describe("deleteElections", () => {
 
   it("deletes the deletable elections in a batch while blocking the running one", async () => {
     fakePrisma._data.elections.push(
-      { id: "e1", title: "Draft", status: "DRAFT" },
-      { id: "e2", title: "Live", status: "OPEN" },
-      { id: "e3", title: "Closed", status: "CLOSED" }
+      { id: "e1", title: "Draft", status: "DRAFT", createdById: "admin1" },
+      { id: "e2", title: "Live", status: "OPEN", createdById: "admin1" },
+      { id: "e3", title: "Closed", status: "CLOSED", createdById: "admin1" }
     );
 
-    const result = await deleteElections(["e1", "e2", "e3"], "admin1");
+    const result = await deleteElections(["e1", "e2", "e3"], accountAdmin);
 
     expect(result.deletedIds.sort()).toEqual(["e1", "e3"]);
     expect(result.blocked).toEqual([{ id: "e2", title: "Live" }]);
@@ -91,9 +94,28 @@ describe("deleteElections", () => {
   });
 
   it("ignores ids that don't match any election", async () => {
-    const result = await deleteElections(["does-not-exist"], "admin1");
+    const result = await deleteElections(["does-not-exist"], accountAdmin);
     expect(result.deletedIds).toEqual([]);
     expect(result.blocked).toEqual([]);
+  });
+
+  it("silently drops an id belonging to a different account admin, rather than deleting or reporting it", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Someone else's", status: "DRAFT", createdById: "admin2" });
+
+    const result = await deleteElections(["e1"], accountAdmin);
+
+    expect(result.deletedIds).toEqual([]);
+    expect(result.blocked).toEqual([]);
+    expect(fakePrisma._data.elections).toHaveLength(1);
+  });
+
+  it("lets a product admin delete any account admin's election", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "Someone else's", status: "DRAFT", createdById: "admin2" });
+
+    const result = await deleteElections(["e1"], productAdmin);
+
+    expect(result.deletedIds).toEqual(["e1"]);
+    expect(fakePrisma._data.elections).toHaveLength(0);
   });
 });
 

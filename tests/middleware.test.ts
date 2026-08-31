@@ -25,7 +25,7 @@ describe("middleware: admin routes", () => {
   });
 
   it("lets /admin through with a valid admin session cookie", async () => {
-    const token = await signAdminSession({ sub: "admin1", email: "a@b.com" });
+    const token = await signAdminSession({ sub: "admin1", email: "a@b.com", role: "ACCOUNT_ADMIN" });
     const res = await middleware(requestWithCookie("http://localhost/admin", ADMIN_SESSION_COOKIE, token));
     expect(res.status).toBe(200);
   });

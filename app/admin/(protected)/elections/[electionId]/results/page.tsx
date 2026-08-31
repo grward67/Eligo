@@ -1,4 +1,7 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireAdminSession } from "@/lib/auth/require-admin";
+import { isOwnedElection } from "@/lib/auth/election-access";
 import { runSTV, StvValidationError } from "@/lib/stv/count";
 import { runFPTP, FptpValidationError } from "@/lib/fptp/count";
 import { runPR, PrValidationError } from "@/lib/pr/count";
@@ -11,6 +14,9 @@ function fmtNum(n: number): string {
 }
 
 export default async function ResultsPage({ params }: { params: { electionId: string } }) {
+  const session = await requireAdminSession();
+  if (!session) redirect("/admin/login");
+
   await applyDueScheduleTransitions(params.electionId);
 
   const election = await prisma.election.findUnique({
@@ -18,7 +24,7 @@ export default async function ResultsPage({ params }: { params: { electionId: st
     include: { candidates: true, partyLists: { orderBy: { sortOrder: "asc" }, include: { candidates: true } } },
   });
 
-  if (!election) {
+  if (!election || !isOwnedElection(election.createdById, session)) {
     return <p>Election not found.</p>;
   }
 

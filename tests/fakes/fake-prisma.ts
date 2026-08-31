@@ -13,6 +13,22 @@ export interface FakeElection {
   prThreshold?: number;
   prCalculationMethod?: string;
   prAllowBlankVote?: boolean;
+  createdById?: string;
+  createdAt?: Date;
+}
+
+export interface FakeAdmin {
+  id: string;
+  email: string;
+  passwordHash: string;
+  role?: string;
+  createdAt?: Date;
+}
+
+export interface FakePlatformSettings {
+  id: string;
+  ballotQuotaLimit: number;
+  ballotQuotaPeriodDays: number;
 }
 
 export interface FakeCandidate {
@@ -82,6 +98,19 @@ export interface FakeAuditLog {
 
 type FakePartyListWithCandidates = FakePartyList & { candidates?: FakePartyListCandidate[] };
 
+function filterAuditLogs(
+  auditLogs: FakeAuditLog[],
+  where?: { targetType?: string; targetId?: string; action?: string; actorId?: string; createdAt?: { gte?: Date } }
+): FakeAuditLog[] {
+  let rows = auditLogs.slice();
+  if (where?.targetType !== undefined) rows = rows.filter((r) => r.targetType === where.targetType);
+  if (where?.targetId !== undefined) rows = rows.filter((r) => r.targetId === where.targetId);
+  if (where?.action !== undefined) rows = rows.filter((r) => r.action === where.action);
+  if (where?.actorId !== undefined) rows = rows.filter((r) => r.actorId === where.actorId);
+  if (where?.createdAt?.gte !== undefined) rows = rows.filter((r) => r.createdAt.getTime() >= where.createdAt!.gte!.getTime());
+  return rows;
+}
+
 export interface FakePrismaClient {
   _data: {
     elections: FakeElection[];
@@ -92,6 +121,18 @@ export interface FakePrismaClient {
     voterSessions: FakeVoterSession[];
     ballots: FakeBallot[];
     auditLogs: FakeAuditLog[];
+    admins: FakeAdmin[];
+    platformSettings: FakePlatformSettings[];
+  };
+  admin: {
+    findUnique: (args: { where: { id?: string; email?: string } }) => Promise<FakeAdmin | null>;
+    findMany: (args?: { orderBy?: { createdAt: "asc" | "desc" } }) => Promise<FakeAdmin[]>;
+    create: (args: { data: Partial<FakeAdmin> }) => Promise<FakeAdmin>;
+  };
+  platformSettings: {
+    findFirst: () => Promise<FakePlatformSettings | null>;
+    create: (args: { data: Partial<FakePlatformSettings> }) => Promise<FakePlatformSettings>;
+    update: (args: { where: { id: string }; data: Partial<FakePlatformSettings> }) => Promise<FakePlatformSettings>;
   };
   election: {
     findUnique: (args: {
@@ -101,7 +142,11 @@ export interface FakePrismaClient {
         partyLists?: { orderBy?: { sortOrder: "asc" }; include?: { candidates?: { orderBy?: { rank: "asc" } } } };
       };
     }) => Promise<(FakeElection & { candidates?: FakeCandidate[]; partyLists?: FakePartyListWithCandidates[] }) | null>;
-    findMany: (args: { where: { id: { in: string[] } } }) => Promise<FakeElection[]>;
+    findMany: (args?: {
+      where?: { id?: { in: string[] }; createdById?: string };
+      orderBy?: { createdAt: "asc" | "desc" };
+      include?: { createdBy?: { select?: { email?: true } } };
+    }) => Promise<(FakeElection & { createdBy?: { email: string } })[]>;
     create: (args: { data: Partial<FakeElection> }) => Promise<FakeElection>;
     update: (args: { where: { id: string }; data: Partial<FakeElection> }) => Promise<FakeElection>;
     delete: (args: { where: { id: string } }) => Promise<FakeElection>;
@@ -131,8 +176,8 @@ export interface FakePrismaClient {
     findFirst: (args: { where: { electionId: string; codeHash: string } }) => Promise<FakeAccessCode | null>;
     findUnique: (args: {
       where: { id?: string; codeHash?: string };
-      include?: { election?: { select: { title: true } } };
-    }) => Promise<(FakeAccessCode & { election?: { title: string } }) | null>;
+      include?: { election?: { select: { title?: true; createdById?: true } } };
+    }) => Promise<(FakeAccessCode & { election?: { title: string; createdById: string } }) | null>;
     create: (args: { data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
     createMany: (args: { data: Partial<FakeAccessCode>[] }) => Promise<{ count: number }>;
     update: (args: { where: { id: string }; data: Partial<FakeAccessCode> }) => Promise<FakeAccessCode>;
@@ -161,9 +206,12 @@ export interface FakePrismaClient {
   auditLog: {
     create: (args: { data: Partial<FakeAuditLog> }) => Promise<FakeAuditLog>;
     findMany: (args: {
-      where?: { targetType?: string; targetId?: string; action?: string; actorId?: string };
+      where?: { targetType?: string; targetId?: string; action?: string; actorId?: string; createdAt?: { gte?: Date } };
       orderBy?: { createdAt: "asc" | "desc" };
     }) => Promise<FakeAuditLog[]>;
+    count: (args: {
+      where?: { targetType?: string; targetId?: string; action?: string; actorId?: string; createdAt?: { gte?: Date } };
+    }) => Promise<number>;
   };
   $transaction<T>(fnOrArray: ((tx: FakePrismaClient) => Promise<T>) | Promise<unknown>[]): Promise<T>;
 }
@@ -177,11 +225,46 @@ export function createFakePrisma(): FakePrismaClient {
   const voterSessions: FakeVoterSession[] = [];
   const ballots: FakeBallot[] = [];
   const auditLogs: FakeAuditLog[] = [];
+  const admins: FakeAdmin[] = [];
+  const platformSettings: FakePlatformSettings[] = [];
   let idCounter = 0;
   const nextId = () => `id_${++idCounter}`;
 
   const fake: FakePrismaClient = {
-    _data: { elections, candidates, partyLists, partyListCandidates, accessCodes, voterSessions, ballots, auditLogs },
+    _data: { elections, candidates, partyLists, partyListCandidates, accessCodes, voterSessions, ballots, auditLogs, admins, platformSettings },
+
+    admin: {
+      findUnique: async ({ where }: { where: { id?: string; email?: string } }) =>
+        admins.find((a) => (where.id !== undefined && a.id === where.id) || (where.email !== undefined && a.email === where.email)) ?? null,
+      findMany: async (args?: { orderBy?: { createdAt: "asc" | "desc" } }) => {
+        const rows = admins.slice();
+        if (args?.orderBy?.createdAt) {
+          const dir = args.orderBy.createdAt === "asc" ? 1 : -1;
+          rows.sort((a, b) => dir * ((a.createdAt ?? new Date(0)).getTime() - (b.createdAt ?? new Date(0)).getTime()));
+        }
+        return rows;
+      },
+      create: async ({ data }: { data: Partial<FakeAdmin> }) => {
+        const row = { id: nextId(), role: "ACCOUNT_ADMIN", createdAt: new Date(), ...data } as FakeAdmin;
+        admins.push(row);
+        return row;
+      },
+    },
+
+    platformSettings: {
+      findFirst: async () => platformSettings[0] ?? null,
+      create: async ({ data }: { data: Partial<FakePlatformSettings> }) => {
+        const row = { id: nextId(), ballotQuotaLimit: 5, ballotQuotaPeriodDays: 30, ...data } as FakePlatformSettings;
+        platformSettings.push(row);
+        return row;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FakePlatformSettings> }) => {
+        const row = platformSettings.find((p) => p.id === where.id);
+        if (!row) throw new Error("platformSettings not found");
+        Object.assign(row, data);
+        return row;
+      },
+    },
 
     election: {
       findUnique: async ({
@@ -222,8 +305,23 @@ export function createFakePrisma(): FakePrismaClient {
         }
         return result;
       },
-      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
-        elections.filter((e) => where.id.in.includes(e.id)),
+      findMany: async (args?: {
+        where?: { id?: { in: string[] }; createdById?: string };
+        orderBy?: { createdAt: "asc" | "desc" };
+        include?: { createdBy?: { select?: { email?: true } } };
+      }) => {
+        let rows = elections.slice();
+        if (args?.where?.id) rows = rows.filter((e) => args.where!.id!.in.includes(e.id));
+        if (args?.where?.createdById !== undefined) rows = rows.filter((e) => e.createdById === args.where!.createdById);
+        if (args?.orderBy?.createdAt) {
+          const dir = args.orderBy.createdAt === "asc" ? 1 : -1;
+          rows.sort((a, b) => dir * ((a.createdAt ?? new Date(0)).getTime() - (b.createdAt ?? new Date(0)).getTime()));
+        }
+        if (args?.include?.createdBy) {
+          return rows.map((e) => ({ ...e, createdBy: { email: admins.find((a) => a.id === e.createdById)?.email ?? "" } }));
+        }
+        return rows;
+      },
       create: async ({ data }: { data: Partial<FakeElection> }) => {
         const row = {
           id: nextId(),
@@ -331,7 +429,7 @@ export function createFakePrisma(): FakePrismaClient {
         include,
       }: {
         where: { id?: string; codeHash?: string };
-        include?: { election?: { select: { title: true } } };
+        include?: { election?: { select: { title?: true; createdById?: true } } };
       }) => {
         const row = accessCodes.find(
           (c) => (where.id !== undefined && c.id === where.id) || (where.codeHash !== undefined && c.codeHash === where.codeHash)
@@ -339,7 +437,7 @@ export function createFakePrisma(): FakePrismaClient {
         if (!row) return null;
         if (include?.election) {
           const election = elections.find((e) => e.id === row.electionId);
-          return { ...row, election: { title: election?.title ?? "" } };
+          return { ...row, election: { title: election?.title ?? "", createdById: election?.createdById ?? "" } };
         }
         return row;
       },
@@ -488,20 +586,21 @@ export function createFakePrisma(): FakePrismaClient {
         where,
         orderBy,
       }: {
-        where?: { targetType?: string; targetId?: string; action?: string; actorId?: string };
+        where?: { targetType?: string; targetId?: string; action?: string; actorId?: string; createdAt?: { gte?: Date } };
         orderBy?: { createdAt: "asc" | "desc" };
       }) => {
-        let rows = auditLogs.slice();
-        if (where?.targetType !== undefined) rows = rows.filter((r) => r.targetType === where.targetType);
-        if (where?.targetId !== undefined) rows = rows.filter((r) => r.targetId === where.targetId);
-        if (where?.action !== undefined) rows = rows.filter((r) => r.action === where.action);
-        if (where?.actorId !== undefined) rows = rows.filter((r) => r.actorId === where.actorId);
+        let rows = filterAuditLogs(auditLogs, where);
         if (orderBy?.createdAt) {
           const dir = orderBy.createdAt === "asc" ? 1 : -1;
           rows.sort((a, b) => dir * (a.createdAt.getTime() - b.createdAt.getTime()));
         }
         return rows;
       },
+      count: async ({
+        where,
+      }: {
+        where?: { targetType?: string; targetId?: string; action?: string; actorId?: string; createdAt?: { gte?: Date } };
+      }) => filterAuditLogs(auditLogs, where).length,
     },
 
     async $transaction<T>(fnOrArray: ((tx: FakePrismaClient) => Promise<T>) | Promise<unknown>[]): Promise<T> {

@@ -1,8 +1,15 @@
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireAdminSession } from "@/lib/auth/require-admin";
+import { getOwnedElection } from "@/lib/auth/election-access";
 import { GenerateCodeForm } from "@/components/admin/generate-code-form";
 import { RevokeCodeButton } from "@/components/admin/revoke-code-button";
 
 export default async function CodesPage({ params }: { params: { electionId: string } }) {
+  const session = await requireAdminSession();
+  if (!session) redirect("/admin/login");
+  if (!(await getOwnedElection(params.electionId, session))) notFound();
+
   const codes = await prisma.accessCode.findMany({
     where: { electionId: params.electionId },
     orderBy: { createdAt: "desc" },

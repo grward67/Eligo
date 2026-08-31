@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { requireAdminSession } from "@/lib/auth/require-admin";
+import { isOwnedElection } from "@/lib/auth/election-access";
 import { CandidateForm } from "@/components/admin/candidate-form";
 import { ElectionStatusControl } from "@/components/admin/election-status-control";
 import { ElectionScheduleForm } from "@/components/admin/election-schedule-form";
@@ -9,6 +11,9 @@ import { PartyListManager } from "@/components/admin/party-list-manager";
 import { applyDueScheduleTransitions } from "@/lib/services/election-schedule-service";
 
 export default async function ElectionDetailPage({ params }: { params: { electionId: string } }) {
+  const session = await requireAdminSession();
+  if (!session) redirect("/admin/login");
+
   await applyDueScheduleTransitions(params.electionId);
 
   const election = await prisma.election.findUnique({
@@ -19,7 +24,7 @@ export default async function ElectionDetailPage({ params }: { params: { electio
     },
   });
 
-  if (!election) notFound();
+  if (!election || !isOwnedElection(election.createdById, session)) notFound();
 
   const status = election.status as "DRAFT" | "OPEN" | "CLOSED";
 

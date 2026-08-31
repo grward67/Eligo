@@ -18,6 +18,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const result = await lookupCode(parsed.data.code);
+  const result = await lookupCode(parsed.data.code, admin);
   return NextResponse.json(result);
 }

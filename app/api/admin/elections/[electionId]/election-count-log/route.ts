@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/auth/require-admin";
+import { getOwnedElection } from "@/lib/auth/election-access";
 import { buildElectionCountLog } from "@/lib/services/election-count-log-service";
 
 export async function GET(request: NextRequest, { params }: { params: { electionId: string } }) {
   const admin = await requireAdminSession();
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!(await getOwnedElection(params.electionId, admin))) {
+    return NextResponse.json({ error: "Election not found." }, { status: 404 });
   }
 
   const result = await buildElectionCountLog(params.electionId);

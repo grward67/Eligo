@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db";
 import { generateAccessCode, hashAccessCode } from "@/lib/auth/access-code";
 import { writeAuditLog } from "@/lib/audit/log";
 import { MAX_GENERATE_COUNT } from "@/lib/services/code-limits";
+import { isOwnedElection } from "@/lib/auth/election-access";
+import type { AdminSessionPayload } from "@/lib/auth/admin-session";
 
 export { MAX_GENERATE_COUNT } from "@/lib/services/code-limits";
 
@@ -87,15 +89,20 @@ export interface CodeLookupResult {
   ballotId?: string | null;
 }
 
-/** Support-desk lookup: what is this specific plaintext code's current state, and has it voted? */
-export async function lookupCode(rawCode: string): Promise<CodeLookupResult> {
+/**
+ * Support-desk lookup: what is this specific plaintext code's current state, and has it voted?
+ * Scoped to `session`'s own elections (product admins can look up any code) -- otherwise this
+ * would let any account admin probe arbitrary codes belonging to another admin's election, so a
+ * code belonging to someone else's election is reported exactly like one that doesn't exist.
+ */
+export async function lookupCode(rawCode: string, session: AdminSessionPayload): Promise<CodeLookupResult> {
   const codeHash = hashAccessCode(rawCode);
   const code = await prisma.accessCode.findUnique({
     where: { codeHash },
-    include: { election: { select: { title: true } } },
+    include: { election: { select: { title: true, createdById: true } } },
   });
 
-  if (!code) {
+  if (!code || !isOwnedElection(code.election.createdById, session)) {
     return { found: false };
   }
 

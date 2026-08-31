@@ -14,8 +14,14 @@ model Admin {
   id           String       @id @default(cuid())
   email        String       @unique
   passwordHash String
+  // "PRODUCT_ADMIN" | "ACCOUNT_ADMIN", validated at the application layer
+  // like Election.status. Product admins have unrestricted access across
+  // every account admin's elections and manage platform-wide settings;
+  // account admins are scoped to elections they created.
+  role         String       @default("ACCOUNT_ADMIN")
   createdAt    DateTime     @default(now())
   accessCodes  AccessCode[]
+  elections    Election[]
 }
 
 model Election {
@@ -45,6 +51,12 @@ model Election {
   prCalculationMethod String         @default("DHONDT")
   // Locked once status leaves DRAFT, same as prThreshold/prCalculationMethod.
   prAllowBlankVote    Boolean        @default(false)
+  // Owning account admin -- scopes visibility everywhere on the admin side
+  // (product admins bypass this scoping entirely). Required; backfilled to
+  // the sole pre-existing admin for elections created before multi-admin
+  // support existed.
+  createdById         String
+  createdBy           Admin          @relation(fields: [createdById], references: [id])
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   candidates          Candidate[]
@@ -52,6 +64,8 @@ model Election {
   accessCodes         AccessCode[]
   voterSessions       VoterSession[]
   ballots             Ballot[]
+
+  @@index([createdById])
 }
 
 model Candidate {
@@ -143,6 +157,18 @@ model Ballot {
   submittedAt    DateTime     @default(now())
 
   @@index([electionId])
+}
+
+// Singleton row (there is ever exactly one) holding platform-wide policy the
+// product admin controls. Read via a plain findFirst -- no well-known id is
+// relied on.
+model PlatformSettings {
+  id                    String @id @default(cuid())
+  // An account admin may create at most `ballotQuotaLimit` elections within
+  // any trailing `ballotQuotaPeriodDays`-day window (see the audit log's
+  // "election.create" entries, counted regardless of later deletion).
+  ballotQuotaLimit      Int    @default(5)
+  ballotQuotaPeriodDays Int    @default(30)
 }
 
 // Deliberately loose references (plain string ids, no FK) so audit

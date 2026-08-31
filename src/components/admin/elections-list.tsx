@@ -11,6 +11,7 @@ interface ElectionSummary {
   votingSystem: string;
   startLabel: string | null;
   endLabel: string | null;
+  ownerEmail: string | null;
 }
 
 const VOTING_SYSTEM_LABELS: Record<string, string> = {
@@ -126,6 +127,7 @@ export function ElectionsList({ elections }: { elections: ElectionSummary[] }) {
                 <span className="voting-system-label">{VOTING_SYSTEM_LABELS[e.votingSystem] ?? e.votingSystem}</span>
               )}
               <span className={`status-badge status-${e.status.toLowerCase()}`}>{e.status}</span>
+              {e.ownerEmail && <span className="election-owner-label">{e.ownerEmail}</span>}
             </div>
             {(e.startLabel || e.endLabel) && (
               <p className="election-schedule-labels">

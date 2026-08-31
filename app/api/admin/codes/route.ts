@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminSession } from "@/lib/auth/require-admin";
+import { getOwnedElection } from "@/lib/auth/election-access";
 import { generateCodes, MAX_GENERATE_COUNT } from "@/lib/services/code-service";
 
 const bodySchema = z.object({
@@ -20,6 +21,10 @@ export async function POST(request: NextRequest) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  if (!(await getOwnedElection(parsed.data.electionId, admin))) {
+    return NextResponse.json({ error: "Election not found." }, { status: 404 });
   }
 
   const codes = await generateCodes({

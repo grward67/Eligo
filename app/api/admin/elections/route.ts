@@ -4,6 +4,7 @@ import { requireAdminSession } from "@/lib/auth/require-admin";
 import { prisma } from "@/lib/db";
 import { writeAuditLog } from "@/lib/audit/log";
 import { deleteElections } from "@/lib/services/election-service";
+import { getBallotQuotaStatus } from "@/lib/services/quota-service";
 
 const bodySchema = z.object({
   title: z.string().min(1),
@@ -22,8 +23,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
+  if (admin.role !== "PRODUCT_ADMIN") {
+    const quota = await getBallotQuotaStatus(admin.sub);
+    if (quota.exceeded) {
+      return NextResponse.json(
+        { error: `You've reached your limit of ${quota.limit} ballot(s) per ${quota.periodDays} day(s).` },
+        { status: 403 }
+      );
+    }
+  }
+
   const election = await prisma.election.create({
-    data: { title: parsed.data.title, seats: parsed.data.seats, votingSystem: parsed.data.votingSystem },
+    data: { title: parsed.data.title, seats: parsed.data.seats, votingSystem: parsed.data.votingSystem, createdById: admin.sub },
   });
 
   await writeAuditLog({
@@ -53,6 +64,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const result = await deleteElections(parsed.data.electionIds, admin.sub);
+  const result = await deleteElections(parsed.data.electionIds, admin);
   return NextResponse.json(result);
 }

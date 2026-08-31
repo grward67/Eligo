@@ -12,7 +12,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
 
   return (
     <div className="admin-shell">
-      <AdminNav email={session.email} />
+      <AdminNav email={session.email} role={session.role} />
       <div className="admin-content">{children}</div>
     </div>
   );
