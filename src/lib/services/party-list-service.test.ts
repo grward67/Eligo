@@ -4,7 +4,7 @@ import { createFakePrisma } from "../../../tests/fakes/fake-prisma";
 const fakePrisma = createFakePrisma();
 vi.mock("@/lib/db", () => ({ prisma: fakePrisma }));
 
-const { createPartyList, addListCandidate } = await import("./party-list-service");
+const { createPartyList, addListCandidate, updatePartyList, updateListCandidate } = await import("./party-list-service");
 
 function resetData() {
   fakePrisma._data.elections.length = 0;
@@ -77,5 +77,70 @@ describe("addListCandidate", () => {
     const result = await addListCandidate("does-not-exist", "Jane", "Doe", "admin1");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toBe("LIST_NOT_FOUND");
+  });
+});
+
+describe("updatePartyList", () => {
+  beforeEach(resetData);
+
+  it("updates the name and abbreviation while DRAFT", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "DRAFT", seats: 1 });
+    fakePrisma._data.partyLists.push({ id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A" });
+
+    const result = await updatePartyList("l1", "Alpha Party", "ALP", "admin1");
+
+    expect(result.ok).toBe(true);
+    expect(fakePrisma._data.partyLists[0]).toMatchObject({ name: "Alpha Party", abbreviation: "ALP" });
+    expect(fakePrisma._data.auditLogs).toHaveLength(1);
+  });
+
+  it("refuses to update once the election is OPEN", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "OPEN", seats: 1 });
+    fakePrisma._data.partyLists.push({ id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A" });
+
+    const result = await updatePartyList("l1", "Alpha Party", "ALP", "admin1");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("NOT_DRAFT");
+    expect(fakePrisma._data.partyLists[0].name).toBe("Alpha");
+  });
+
+  it("reports NOT_FOUND for an unknown list", async () => {
+    const result = await updatePartyList("does-not-exist", "Alpha Party", "ALP", "admin1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("NOT_FOUND");
+  });
+});
+
+describe("updateListCandidate", () => {
+  beforeEach(resetData);
+
+  it("updates first and last name while DRAFT", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "DRAFT", seats: 1 });
+    fakePrisma._data.partyLists.push({ id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A" });
+    fakePrisma._data.partyListCandidates.push({ id: "c1", listId: "l1", firstName: "Jane", lastName: "Doe", rank: 1 });
+
+    const result = await updateListCandidate("c1", "Janet", "Doerty", "admin1");
+
+    expect(result.ok).toBe(true);
+    expect(fakePrisma._data.partyListCandidates[0]).toMatchObject({ firstName: "Janet", lastName: "Doerty" });
+    expect(fakePrisma._data.auditLogs).toHaveLength(1);
+  });
+
+  it("refuses to update once the election is OPEN", async () => {
+    fakePrisma._data.elections.push({ id: "e1", title: "e", status: "OPEN", seats: 1 });
+    fakePrisma._data.partyLists.push({ id: "l1", electionId: "e1", name: "Alpha", abbreviation: "A" });
+    fakePrisma._data.partyListCandidates.push({ id: "c1", listId: "l1", firstName: "Jane", lastName: "Doe", rank: 1 });
+
+    const result = await updateListCandidate("c1", "Janet", "Doerty", "admin1");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("NOT_DRAFT");
+  });
+
+  it("reports NOT_FOUND for an unknown candidate", async () => {
+    const result = await updateListCandidate("does-not-exist", "Janet", "Doerty", "admin1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("NOT_FOUND");
   });
 });

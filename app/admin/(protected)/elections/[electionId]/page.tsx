@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireAdminSession } from "@/lib/auth/require-admin";
 import { isOwnedElection } from "@/lib/auth/election-access";
 import { CandidateForm } from "@/components/admin/candidate-form";
+import { CandidateList } from "@/components/admin/candidate-list";
 import { ElectionStatusControl } from "@/components/admin/election-status-control";
 import { ElectionScheduleForm } from "@/components/admin/election-schedule-form";
 import { PrSettingsForm } from "@/components/admin/pr-settings-form";
@@ -67,14 +68,7 @@ export default async function ElectionDetailPage({ params }: { params: { electio
       ) : (
         <>
           <h2>Candidates</h2>
-          <ul>
-            {election.candidates.map((c) => (
-              <li key={c.id}>
-                {c.name}
-                {c.party ? ` (${c.party})` : ""}
-              </li>
-            ))}
-          </ul>
+          <CandidateList candidates={election.candidates} editable={status === "DRAFT"} />
           {status === "DRAFT" && <CandidateForm electionId={election.id} />}
         </>
       )}

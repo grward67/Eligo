@@ -31,6 +31,24 @@ export async function getOwnedPartyList(listId: string, session: AdminSessionPay
   return list;
 }
 
+/** Same idea, for a Candidate (STV/FPTP) reached by id (e.g. editing it). */
+export async function getOwnedCandidate(candidateId: string, session: AdminSessionPayload) {
+  const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
+  if (!candidate) return null;
+  const election = await getOwnedElection(candidate.electionId, session);
+  if (!election) return null;
+  return candidate;
+}
+
+/** Same idea, for a PartyListCandidate (PR) reached by id (e.g. editing it) -- resolves up through its list. */
+export async function getOwnedPartyListCandidate(candidateId: string, session: AdminSessionPayload) {
+  const candidate = await prisma.partyListCandidate.findUnique({ where: { id: candidateId } });
+  if (!candidate) return null;
+  const list = await getOwnedPartyList(candidate.listId, session);
+  if (!list) return null;
+  return candidate;
+}
+
 /** Same idea, for an AccessCode reached by id (e.g. revoking it). */
 export async function getOwnedAccessCode(codeId: string, session: AdminSessionPayload) {
   const code = await prisma.accessCode.findUnique({ where: { id: codeId } });

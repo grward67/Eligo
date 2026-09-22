@@ -184,6 +184,47 @@
   margin: 10px 0 0;
 }
 
+.edit-link-btn {
+  margin-left: 10px;
+  padding: 1px 10px;
+  border: 1px solid var(--color-base-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-base-100);
+  color: var(--color-base-content-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.cancel-edit-btn {
+  background: var(--color-base-200) !important;
+  color: var(--color-base-content) !important;
+}
+.candidate-edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+.candidate-edit-row input {
+  padding: 5px 8px;
+  border: 1px solid var(--color-base-border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.list-header-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.list-header-edit input {
+  padding: 5px 8px;
+  border: 1px solid var(--color-base-border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
 .election-list,
 .election-list li {
   list-style: none;

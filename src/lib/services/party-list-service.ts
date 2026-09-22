@@ -73,3 +73,62 @@ export async function addListCandidate(listId: string, firstName: string, lastNa
     warning: underfilledWarning(count + 1, election.seats),
   };
 }
+
+export interface UpdatePartyListResult {
+  ok: boolean;
+  error?: "NOT_FOUND" | "NOT_DRAFT";
+  list?: { id: string; name: string; abbreviation: string };
+}
+
+/** Same DRAFT-only lock as createPartyList -- renaming a list after voting has started would be just as disruptive as adding a new one. */
+export async function updatePartyList(listId: string, name: string, abbreviation: string, updatedById: string): Promise<UpdatePartyListResult> {
+  const list = await prisma.partyList.findUnique({ where: { id: listId } });
+  if (!list) return { ok: false, error: "NOT_FOUND" };
+
+  const election = await prisma.election.findUnique({ where: { id: list.electionId } });
+  if (!election || election.status !== "DRAFT") return { ok: false, error: "NOT_DRAFT" };
+
+  const updated = await prisma.partyList.update({ where: { id: listId }, data: { name, abbreviation } });
+
+  await writeAuditLog({
+    actorType: "admin",
+    actorId: updatedById,
+    action: "partylist.update",
+    targetType: "PartyList",
+    targetId: listId,
+    metadata: { name: updated.name, abbreviation: updated.abbreviation },
+  });
+
+  return { ok: true, list: { id: updated.id, name: updated.name, abbreviation: updated.abbreviation } };
+}
+
+export interface UpdateListCandidateResult {
+  ok: boolean;
+  error?: "NOT_FOUND" | "NOT_DRAFT";
+  candidate?: { id: string; firstName: string; lastName: string };
+}
+
+/** Same DRAFT-only lock as addListCandidate. */
+export async function updateListCandidate(candidateId: string, firstName: string, lastName: string, updatedById: string): Promise<UpdateListCandidateResult> {
+  const candidate = await prisma.partyListCandidate.findUnique({ where: { id: candidateId } });
+  if (!candidate) return { ok: false, error: "NOT_FOUND" };
+
+  const list = await prisma.partyList.findUnique({ where: { id: candidate.listId } });
+  if (!list) return { ok: false, error: "NOT_FOUND" };
+
+  const election = await prisma.election.findUnique({ where: { id: list.electionId } });
+  if (!election || election.status !== "DRAFT") return { ok: false, error: "NOT_DRAFT" };
+
+  const updated = await prisma.partyListCandidate.update({ where: { id: candidateId }, data: { firstName, lastName } });
+
+  await writeAuditLog({
+    actorType: "admin",
+    actorId: updatedById,
+    action: "partylistcandidate.update",
+    targetType: "PartyListCandidate",
+    targetId: candidateId,
+    metadata: { firstName: updated.firstName, lastName: updated.lastName },
+  });
+
+  return { ok: true, candidate: { id: updated.id, firstName: updated.firstName, lastName: updated.lastName } };
+}

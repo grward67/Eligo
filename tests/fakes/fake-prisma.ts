@@ -152,8 +152,10 @@ export interface FakePrismaClient {
     delete: (args: { where: { id: string } }) => Promise<FakeElection>;
   };
   candidate: {
+    findUnique: (args: { where: { id: string } }) => Promise<FakeCandidate | null>;
     findMany: (args: { where: { electionId: string } }) => Promise<FakeCandidate[]>;
     create: (args: { data: Partial<FakeCandidate> }) => Promise<FakeCandidate>;
+    update: (args: { where: { id: string }; data: Partial<FakeCandidate> }) => Promise<FakeCandidate>;
     count: (args: { where: { electionId: string } }) => Promise<number>;
     deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
@@ -164,12 +166,15 @@ export interface FakePrismaClient {
     }) => Promise<FakePartyListWithCandidates | null>;
     findMany: (args: { where: { electionId: string } }) => Promise<FakePartyList[]>;
     create: (args: { data: Partial<FakePartyList> }) => Promise<FakePartyList>;
+    update: (args: { where: { id: string }; data: Partial<FakePartyList> }) => Promise<FakePartyList>;
     count: (args: { where: { electionId: string } }) => Promise<number>;
     deleteMany: (args: { where: { electionId: string } }) => Promise<{ count: number }>;
   };
   partyListCandidate: {
+    findUnique: (args: { where: { id: string } }) => Promise<FakePartyListCandidate | null>;
     findMany: (args: { where: { listId: string } }) => Promise<FakePartyListCandidate[]>;
     create: (args: { data: Partial<FakePartyListCandidate> }) => Promise<FakePartyListCandidate>;
+    update: (args: { where: { id: string }; data: Partial<FakePartyListCandidate> }) => Promise<FakePartyListCandidate>;
     count: (args: { where: { listId: string } }) => Promise<number>;
   };
   accessCode: {
@@ -348,11 +353,18 @@ export function createFakePrisma(): FakePrismaClient {
     },
 
     candidate: {
+      findUnique: async ({ where }: { where: { id: string } }) => candidates.find((c) => c.id === where.id) ?? null,
       findMany: async ({ where }: { where: { electionId: string } }) =>
         candidates.filter((c) => c.electionId === where.electionId),
       create: async ({ data }: { data: Partial<FakeCandidate> }) => {
         const row = { id: nextId(), sortOrder: 0, party: null, ...data } as FakeCandidate;
         candidates.push(row);
+        return row;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FakeCandidate> }) => {
+        const row = candidates.find((c) => c.id === where.id);
+        if (!row) throw new Error("candidate not found");
+        Object.assign(row, data);
         return row;
       },
       count: async ({ where }: { where: { electionId: string } }) =>
@@ -394,6 +406,12 @@ export function createFakePrisma(): FakePrismaClient {
         partyLists.push(row);
         return row;
       },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FakePartyList> }) => {
+        const row = partyLists.find((l) => l.id === where.id);
+        if (!row) throw new Error("partyList not found");
+        Object.assign(row, data);
+        return row;
+      },
       count: async ({ where }: { where: { electionId: string } }) =>
         partyLists.filter((l) => l.electionId === where.electionId).length,
       deleteMany: async ({ where }: { where: { electionId: string } }) => {
@@ -410,11 +428,18 @@ export function createFakePrisma(): FakePrismaClient {
     },
 
     partyListCandidate: {
+      findUnique: async ({ where }: { where: { id: string } }) => partyListCandidates.find((c) => c.id === where.id) ?? null,
       findMany: async ({ where }: { where: { listId: string } }) =>
         partyListCandidates.filter((c) => c.listId === where.listId),
       create: async ({ data }: { data: Partial<FakePartyListCandidate> }) => {
         const row = { id: nextId(), ...data } as FakePartyListCandidate;
         partyListCandidates.push(row);
+        return row;
+      },
+      update: async ({ where, data }: { where: { id: string }; data: Partial<FakePartyListCandidate> }) => {
+        const row = partyListCandidates.find((c) => c.id === where.id);
+        if (!row) throw new Error("partyListCandidate not found");
+        Object.assign(row, data);
         return row;
       },
       count: async ({ where }: { where: { listId: string } }) =>
