@@ -16,8 +16,8 @@ export function AdminNav({ email, role }: { email: string; role: "PRODUCT_ADMIN"
   return (
     <nav className="admin-nav">
       <span className="admin-nav-brand">
-        <img src="/brand/logo.png" alt="Eligo" />
-        Eligo
+        <img src="/brand/logo.png" alt="Oenach" />
+        Oenach
       </span>
       <Link href="/admin">Elections</Link>
       <Link href="/admin/lookup">Look up code</Link>

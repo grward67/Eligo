@@ -26,8 +26,8 @@ export default async function BallotPage({ params }: { params: { electionId: str
       <main className="vote-shell">
         <div className="vote-card">
           <div className="vote-brand">
-            <img src="/brand/logo.png" alt="Eligo" />
-            <span>Eligo</span>
+            <img src="/brand/logo.png" alt="Oenach" />
+            <span>Oenach</span>
           </div>
           <h1>Thank you for voting!</h1>
           <p>Your ballot has already been registered for this election.</p>
@@ -44,8 +44,8 @@ export default async function BallotPage({ params }: { params: { electionId: str
       <main className="vote-shell">
         <div className="vote-card">
           <div className="vote-brand">
-            <img src="/brand/logo.png" alt="Eligo" />
-            <span>Eligo</span>
+            <img src="/brand/logo.png" alt="Oenach" />
+            <span>Oenach</span>
           </div>
           <h1>Voting closed</h1>
           <p>This election is not currently open for voting.</p>
@@ -70,8 +70,8 @@ export default async function BallotPage({ params }: { params: { electionId: str
     <main className="vote-shell">
       <div className="vote-card">
         <div className="vote-brand">
-          <img src="/brand/logo.png" alt="Eligo" />
-          <span>Eligo</span>
+          <img src="/brand/logo.png" alt="Oenach" />
+          <span>Oenach</span>
         </div>
         <h1>{election.title}</h1>
         {election.votingSystem === "FPTP" ? (

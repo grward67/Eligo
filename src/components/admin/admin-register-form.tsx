@@ -42,7 +42,7 @@ export function AdminRegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} className="login-form">
-      <img src="/brand/logo.png" alt="Eligo" style={{ height: 40, width: 40, borderRadius: 8 }} />
+      <img src="/brand/logo.png" alt="Oenach" style={{ height: 40, width: 40, borderRadius: 8 }} />
       <h1>Create an account</h1>
       <label>
         Email

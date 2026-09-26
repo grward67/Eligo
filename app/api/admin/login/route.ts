@@ -6,7 +6,8 @@ import { signAdminSession, ADMIN_SESSION_COOKIE, ADMIN_SESSION_MAX_AGE_SECONDS }
 import { writeAuditLog } from "@/lib/audit/log";
 
 const bodySchema = z.object({
-  email: z.string().email(),
+  // Not necessarily an email: the product admin signs in with the plain username "admin".
+  email: z.string().min(1),
   password: z.string().min(1),
 });
 

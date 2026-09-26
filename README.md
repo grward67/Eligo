@@ -1,4 +1,4 @@
-# Eligo Voting (Next.js)
+# Oenach Voting (Next.js)
 
 ## Local setup
 

@@ -37,11 +37,11 @@ export function AdminLoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="login-form">
-      <img src="/brand/logo.png" alt="Eligo" style={{ height: 40, width: 40, borderRadius: 8 }} />
+      <img src="/brand/logo.png" alt="Oenach" style={{ height: 40, width: 40, borderRadius: 8 }} />
       <h1>Admin sign in</h1>
       <label>
-        Email
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+        Username or email
+        <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus autoComplete="username" />
       </label>
       <label>
         Password
